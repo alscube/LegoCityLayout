@@ -28,8 +28,12 @@ LayoutElementWidget::LayoutElementWidget(const QString &name,
     auto *image = new QLabel(this);
     image->setAttribute(Qt::WA_TransparentForMouseEvents);
     image->setAlignment(Qt::AlignCenter);
-    image->setPixmap(QPixmap(resourcePath).scaled(
-        QSize(160, 160), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    QPixmap elementImage(resourcePath);
+//    QSize imageSize = elementImage.size();
+    image->setPixmap(elementImage);
+
+    // image->setPixmap(QPixmap(resourcePath).scaled(
+    //     QSize(160, 160), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     auto *label = new QLabel(name, this);
     label->setAttribute(Qt::WA_TransparentForMouseEvents);

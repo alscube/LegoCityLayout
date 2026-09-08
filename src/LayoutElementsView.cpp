@@ -1,3 +1,4 @@
+
 #include "LayoutElementsView.h"
 
 #include "LayoutElementWidget.h"
@@ -5,14 +6,16 @@
 
 #include <QVBoxLayout>
 
+
 LayoutElementsView::LayoutElementsView(QWidget *parent)
     : QWidget(parent)
 {
 }
 
+
 void LayoutElementsView::addLayoutElements()
 {
-    setMinimumWidth(150);
+    setMinimumWidth(170);
 
     auto *layout = new QVBoxLayout(this);
     const LayoutElementsList elementsList(this);

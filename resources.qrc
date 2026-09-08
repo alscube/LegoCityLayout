@@ -6,5 +6,6 @@
         <file alias="BasePlate32x32Tan.png">resources/BasePlate32x32Tan.png</file>
         <file alias="BasePlate32x32White.png">resources/BasePlate32x32White.png</file>
         <file alias="BasePlate48x48Gray.png">resources/BasePlate48x48Gray.png</file>
+        <file alias="TestPlate.png">resources/TestPlate.png</file>
     </qresource>
 </RCC>

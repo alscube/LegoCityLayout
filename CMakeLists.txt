@@ -13,8 +13,8 @@ qt_add_executable(LegoCityLayout
     src/main.cpp
     src/mainwindow.cpp
     src/mainwindow.h
-    src/CityLayout.cpp
-    src/CityLayout.h
+    src/CityLayoutView.cpp
+    src/CityLayoutView.h
     src/LayoutElementWidget.cpp
     src/LayoutElementWidget.h
     src/LayoutElementsView.cpp

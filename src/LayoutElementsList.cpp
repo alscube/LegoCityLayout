@@ -15,6 +15,9 @@ LayoutElementsList::LayoutElementsList(QWidget *parent)
     m_elements.append(new LayoutElementWidget(
         QCoreApplication::translate("LayoutElementsView", "48x48"),
         QStringLiteral(":/images/BasePlate48x48Gray.png"), parent));
+    m_elements.append(new LayoutElementWidget(
+        QCoreApplication::translate("LayoutElementsView", "Test 32"),
+        QStringLiteral(":/images/TestPlate.png"), parent));
 }
 
 const QList<LayoutElementWidget *> &LayoutElementsList::elements() const

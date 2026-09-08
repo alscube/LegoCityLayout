@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 
-#include "CityLayout.h"
+#include "CityLayoutView.h"
 #include "LayoutElementsView.h"
 #include "Preferences.h"
 
@@ -15,7 +15,7 @@ MainWindow::MainWindow(QWidget *parent)
     layoutElements->addLayoutElements( );
     m_splitter->addWidget( layoutElements );
 
-    m_splitter->addWidget(new CityLayout(m_splitter));
+    m_splitter->addWidget(new CityLayoutView(m_splitter));
     m_splitter->setChildrenCollapsible(false);
     m_splitter->setHandleWidth(8);
     m_splitter->setStyleSheet(
