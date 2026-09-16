@@ -11,6 +11,7 @@
 
 namespace {
 constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
+constexpr int dragThumbnailSize = 120;
 }
 
 LayoutElementWidget::LayoutElementWidget(const QString &name,
@@ -66,6 +67,18 @@ void LayoutElementWidget::mouseMoveEvent(QMouseEvent *event)
 
     auto *drag = new QDrag(this);
     drag->setMimeData(mimeData);
+
+    const QPixmap sourcePixmap(m_resourcePath);
+    if (!sourcePixmap.isNull()) {
+        const QPixmap thumbnail = sourcePixmap.scaled(
+            QSize(dragThumbnailSize, dragThumbnailSize),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation);
+        drag->setPixmap(thumbnail);
+        drag->setHotSpot(QPoint(thumbnail.width() / 2,
+                                thumbnail.height() / 2));
+    }
+
     drag->exec(Qt::CopyAction);
     setCursor(Qt::OpenHandCursor);
 }

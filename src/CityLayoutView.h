@@ -1,6 +1,7 @@
 #pragma once
 
-#include <QList>
+#include "CityLayoutElements.h"
+
 #include <QPoint>
 #include <QWidget>
 
@@ -12,6 +13,8 @@ class QKeyEvent;
 class QLabel;
 class QMouseEvent;
 class QWheelEvent;
+class CityLayoutElement;
+
 
 class CityLayoutView final : public QWidget
 {
@@ -32,18 +35,18 @@ protected:
     void leaveEvent(QEvent *event) override;
 
 private:
-    QLabel *imageAt(const QPoint &position) const;
-    void setHoveredImage(QLabel *image);
-    void setSelectedImage(QLabel *image);
-    void updateImageHighlight(QLabel *image);
-    void deleteImage(QLabel *image);
+    CityLayoutElement *imageAt(const QPoint &position) const;
+    void setHoveredImage(CityLayoutElement *image);
+    void setSelectedImage(CityLayoutElement *image);
+    void updateElementHighLite(CityLayoutElement *image);
+    void clearImageReferences(CityLayoutElement *image);
 
-    QList<QLabel *> m_images;
-    QLabel *m_draggedImage = nullptr;
-    QLabel *m_hoveredImage = nullptr;
-    QLabel *m_selectedImage = nullptr;
+    CityLayoutElements _LayoutElements;
+    CityLayoutElement *_DraggedElement = nullptr;
     QPoint m_dragOffset;
+    QPoint m_mousePressPosition;
     QPoint m_lastPanPosition;
+    bool m_mouseDragged = false;
     bool m_isPanning = false;
     qreal m_zoomFactor = 1.0;
 };

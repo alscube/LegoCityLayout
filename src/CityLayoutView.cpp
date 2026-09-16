@@ -1,6 +1,8 @@
 
 #include "CityLayoutView.h"
+#include "CityLayoutElement.h"
 
+#include <QApplication>
 #include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -11,24 +13,16 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPixmap>
-#include <QVariant>
 #include <QWheelEvent>
 
 #include <cmath>
 
 namespace {
 constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
-constexpr auto originalPixmapProperty = "originalPixmap";
 constexpr qreal minimumZoom = 0.25;
 constexpr qreal maximumZoom = 4.0;
 constexpr int snapDistance = 6;
 
-QPixmap scaledPixmap(const QPixmap &pixmap, qreal zoomFactor)
-{
-    const QSize size(qMax(1, qRound(pixmap.width() * zoomFactor)),
-                     qMax(1, qRound(pixmap.height() * zoomFactor)));
-    return pixmap.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-}
 }
 
 CityLayoutView::CityLayoutView(QWidget *parent)
@@ -62,51 +56,38 @@ void CityLayoutView::dropEvent(QDropEvent *event)
         return;
     }
 
-    auto *image = new QLabel(this);
-    const QPixmap displayedPixmap = scaledPixmap(pixmap, m_zoomFactor);
-    image->setAttribute(Qt::WA_TransparentForMouseEvents);
-    image->setProperty(originalPixmapProperty, QVariant::fromValue(pixmap));
-    image->setPixmap(displayedPixmap);
-    image->setFixedSize(displayedPixmap.size());
+    auto *image = new CityLayoutElement(pixmap, m_zoomFactor, this);
 
     const QPoint requestedPosition = event->position().toPoint()
-                                     - QPoint(displayedPixmap.width() / 2,
-                                              displayedPixmap.height() / 2);
-    const int x = qBound(0, requestedPosition.x(),
-                         qMax(0, width() - displayedPixmap.width()));
-    const int y = qBound(0, requestedPosition.y(),
-                         qMax(0, height() - displayedPixmap.height()));
-    image->move(x, y);
+                                     - QPoint(image->width() / 2,
+                                              image->height() / 2);
+    image->move(requestedPosition);
     image->show();
-    m_images.append(image);
+    _LayoutElements.append(image);
 
     event->acceptProposedAction();
 }
 
 void CityLayoutView::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
+    if (event->buttons().testFlag(Qt::LeftButton)) {
         const QPoint position = event->position().toPoint();
+        m_mousePressPosition = position;
+        m_mouseDragged = false;
 
-        for (qsizetype index = m_images.size(); index-- > 0;) {
-            QLabel *image = m_images.at(index);
+        for (qsizetype index = _LayoutElements.size(); index-- > 0;) {
+            CityLayoutElement *image = _LayoutElements.at(index);
             if (!image->geometry().contains(position)) {
                 continue;
             }
 
-            setFocus(Qt::MouseFocusReason);
-            setSelectedImage(image);
-            m_draggedImage = image;
+            _DraggedElement = image;
             m_dragOffset = position - image->pos();
-            m_images.removeAt(index);
-            m_images.append(image);
-            image->raise();
             setCursor(Qt::ClosedHandCursor);
             event->accept();
             return;
         }
 
-        setSelectedImage(nullptr);
         m_isPanning = true;
         m_lastPanPosition = position;
         setCursor(Qt::ClosedHandCursor);
@@ -119,25 +100,43 @@ void CityLayoutView::mousePressEvent(QMouseEvent *event)
 
 void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
 {
-    if (m_draggedImage && (event->buttons() & Qt::LeftButton)) {
-        const QPoint requestedPosition = event->position().toPoint() - m_dragOffset;
-        int x = qBound(0, requestedPosition.x(),
-                       qMax(0, width() - m_draggedImage->width()));
-        int y = qBound(0, requestedPosition.y(),
-                       qMax(0, height() - m_draggedImage->height()));
+    Qt::MouseButtons button( event->buttons() );
+
+    if ( button & Qt::LeftButton )
+    {
+    if (_DraggedElement) {
+        const QPoint position = event->position().toPoint();
+        if (!m_mouseDragged) {
+            const int distance = (position - m_mousePressPosition).manhattanLength();
+            if (distance < QApplication::startDragDistance()) {
+                event->accept();
+                return;
+            }
+
+            m_mouseDragged = true;
+            setFocus(Qt::MouseFocusReason);
+            setSelectedImage(_DraggedElement);
+            _LayoutElements.removeAll(_DraggedElement);
+            _LayoutElements.append(_DraggedElement);
+            _DraggedElement->raise();
+        }
+
+        const QPoint requestedPosition = position - m_dragOffset;
+        const int x = requestedPosition.x();
+        const int y = requestedPosition.y();
         int snappedX = x;
         int snappedY = y;
         int closestHorizontalSnap = snapDistance + 1;
         int closestVerticalSnap = snapDistance + 1;
 
-        for (QLabel *image : m_images) {
-            if (image == m_draggedImage) {
+        for (CityLayoutElement *image : _LayoutElements) {
+            if (image == _DraggedElement) {
                 continue;
             }
 
             const QRect draggedGeometry(x, y,
-                                        m_draggedImage->width(),
-                                        m_draggedImage->height());
+                                        _DraggedElement->width(),
+                                        _DraggedElement->height());
             const QRect otherGeometry = image->geometry();
 
             const auto snapEdge = [](int draggedEdge, int otherEdge,
@@ -169,24 +168,35 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
                      y, closestVerticalSnap, snappedY);
         }
 
-        x = qBound(0, snappedX, qMax(0, width() - m_draggedImage->width()));
-        y = qBound(0, snappedY, qMax(0, height() - m_draggedImage->height()));
-        m_draggedImage->move(x, y);
+        _DraggedElement->move(snappedX, snappedY);
         event->accept();
         return;
     }
 
-    if (m_isPanning && (event->buttons() & Qt::LeftButton)) {
+
+    if (m_isPanning ) {
         const QPoint position = event->position().toPoint();
+        if (!m_mouseDragged) {
+            const int distance = (position - m_mousePressPosition).manhattanLength();
+            if (distance < QApplication::startDragDistance()) {
+                event->accept();
+                return;
+            }
+
+            m_mouseDragged = true;
+            setSelectedImage(nullptr);
+        }
+
         const QPoint offset = position - m_lastPanPosition;
 
-        for (QLabel *image : m_images) {
+        for (CityLayoutElement *image : _LayoutElements) {
             image->move(image->pos() + offset);
         }
 
         m_lastPanPosition = position;
         event->accept();
         return;
+    }
     }
 
     setHoveredImage(imageAt(event->position().toPoint()));
@@ -196,22 +206,41 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
 
 void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton && m_draggedImage) {
-        m_draggedImage = nullptr;
-        unsetCursor();
-        event->accept();
-        return;
-    }
+    Qt::MouseButtons button( event->button() );
+    if (button == Qt::LeftButton )
+    {
+        if ( _DraggedElement) {
+            if (!m_mouseDragged) {
+                setFocus(Qt::MouseFocusReason);
+                setSelectedImage(_DraggedElement);
+                _LayoutElements.removeAll(_DraggedElement);
+                _LayoutElements.append(_DraggedElement);
+                _DraggedElement->raise();
+            }
 
-    if (event->button() == Qt::LeftButton && m_isPanning) {
-        m_isPanning = false;
-        unsetCursor();
-        event->accept();
-        return;
+            _DraggedElement = nullptr;
+            m_mouseDragged = false;
+            unsetCursor();
+            event->accept();
+            return;
+        }
+
+        if ( m_isPanning) {
+            if (!m_mouseDragged) {
+                setSelectedImage(nullptr);
+            }
+
+            m_isPanning = false;
+            m_mouseDragged = false;
+            unsetCursor();
+            event->accept();
+            return;
+        }
     }
 
     QWidget::mouseReleaseEvent(event);
 }
+
 
 void CityLayoutView::wheelEvent(QWheelEvent *event)
 {
@@ -231,15 +260,10 @@ void CityLayoutView::wheelEvent(QWheelEvent *event)
     const qreal relativeScale = newZoom / m_zoomFactor;
     const QPointF anchor = event->position();
 
-    for (QLabel *image : m_images) {
+    for (CityLayoutElement *image : _LayoutElements) {
         const QPointF position = anchor
                                  + (QPointF(image->pos()) - anchor) * relativeScale;
-        const QPixmap originalPixmap =
-            image->property(originalPixmapProperty).value<QPixmap>();
-        const QPixmap displayedPixmap = scaledPixmap(originalPixmap, newZoom);
-
-        image->setPixmap(displayedPixmap);
-        image->setFixedSize(displayedPixmap.size());
+        image->setZoomFactor(newZoom);
         image->move(qRound(position.x()), qRound(position.y()));
     }
 
@@ -249,10 +273,13 @@ void CityLayoutView::wheelEvent(QWheelEvent *event)
 
 void CityLayoutView::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-        QLabel *image = m_selectedImage ? m_selectedImage : m_hoveredImage;
+    if (event->key() == Qt::Key_Delete ) {
+        CityLayoutElement *image = _LayoutElements.selectedElement()
+            ? _LayoutElements.selectedElement()
+            : _LayoutElements.hoveredElement();
         if (image) {
-            deleteImage(image);
+            clearImageReferences(image);
+            _LayoutElements.deleteImage(image);
             event->accept();
             return;
         }
@@ -263,7 +290,7 @@ void CityLayoutView::keyPressEvent(QKeyEvent *event)
 
 void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
 {
-    QLabel *image = imageAt(event->pos());
+    CityLayoutElement *image = imageAt(event->pos());
     if (!image) {
         QWidget::contextMenuEvent(event);
         return;
@@ -276,7 +303,8 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *deleteAction = menu.addAction(tr("Delete"));
     if (menu.exec(event->globalPos()) == deleteAction) {
-        deleteImage(image);
+        clearImageReferences(image);
+        _LayoutElements.deleteImage(image);
     }
     event->accept();
 }
@@ -287,10 +315,10 @@ void CityLayoutView::leaveEvent(QEvent *event)
     QWidget::leaveEvent(event);
 }
 
-QLabel *CityLayoutView::imageAt(const QPoint &position) const
+CityLayoutElement *CityLayoutView::imageAt(const QPoint &position) const
 {
-    for (qsizetype index = m_images.size(); index-- > 0;) {
-        QLabel *image = m_images.at(index);
+    for (qsizetype index = _LayoutElements.size(); index-- > 0;) {
+        CityLayoutElement *image = _LayoutElements.at(index);
         if (image->geometry().contains(position)) {
             return image;
         }
@@ -298,57 +326,51 @@ QLabel *CityLayoutView::imageAt(const QPoint &position) const
     return nullptr;
 }
 
-void CityLayoutView::setHoveredImage(QLabel *image)
+void CityLayoutView::setHoveredImage( CityLayoutElement* newElement )
 {
-    if (m_hoveredImage == image) {
+    CityLayoutElement* previousElement( _LayoutElements.hoveredElement() );
+    if (previousElement == newElement ) {
         return;
     }
 
-    QLabel *previousImage = m_hoveredImage;
-    m_hoveredImage = image;
-    updateImageHighlight(previousImage);
-    updateImageHighlight(m_hoveredImage);
+    _LayoutElements.setHoveredElement( newElement );
+    updateElementHighLite( previousElement );
+    updateElementHighLite( newElement );
 }
 
-void CityLayoutView::setSelectedImage(QLabel *image)
+
+void CityLayoutView::setSelectedImage(CityLayoutElement* newElement)
 {
-    if (m_selectedImage == image) {
+    CityLayoutElement* previousElement{ _LayoutElements.selectedElement() };
+    if (previousElement == newElement) {
         return;
     }
 
-    QLabel *previousImage = m_selectedImage;
-    m_selectedImage = image;
-    updateImageHighlight(previousImage);
-    updateImageHighlight(m_selectedImage);
+    _LayoutElements.setSelectedElement(newElement);
+    updateElementHighLite( previousElement );
+    updateElementHighLite( newElement );
 }
 
-void CityLayoutView::updateImageHighlight(QLabel *image)
+
+void CityLayoutView::updateElementHighLite(CityLayoutElement* element)
 {
-    if (!image) {
+    if (!element) {
         return;
     }
 
-    const bool highlighted = image == m_hoveredImage || image == m_selectedImage;
-    image->setStyleSheet(highlighted
+    CityLayoutElement* hoveredElement( _LayoutElements.hoveredElement() );
+    CityLayoutElement* selectedElement{ _LayoutElements.selectedElement() };
+    const bool highlighted = (element == hoveredElement)
+                             || (element == selectedElement);
+    element->setStyleSheet(highlighted
         ? QStringLiteral("border: 2px solid orange;")
         : QString());
 }
 
-void CityLayoutView::deleteImage(QLabel *image)
-{
-    if (!image) {
-        return;
-    }
 
-    m_images.removeAll(image);
-    if (m_draggedImage == image) {
-        m_draggedImage = nullptr;
+void CityLayoutView::clearImageReferences(CityLayoutElement *image)
+{
+    if (_DraggedElement == image) {
+        _DraggedElement = nullptr;
     }
-    if (m_hoveredImage == image) {
-        m_hoveredImage = nullptr;
-    }
-    if (m_selectedImage == image) {
-        m_selectedImage = nullptr;
-    }
-    delete image;
 }
