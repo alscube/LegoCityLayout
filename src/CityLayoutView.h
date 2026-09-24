@@ -23,6 +23,15 @@ class CityLayoutView final : public QWidget
 public:
     explicit CityLayoutView(QWidget *parent = nullptr);
 
+    bool mouseDragged() const { return m_mouseDragged; }
+    void setMouseDragged(bool dragged) { m_mouseDragged = dragged; }
+
+    QPoint mousePressPosition() const { return m_mousePressPosition; }
+    // void mousePressPosition(const QPoint &position) { m_mousePressPosition = position; }
+
+    QPoint dragOffset() const { return m_dragOffset; }
+    void setDragOffset(const QPoint &offset) { m_dragOffset = offset; }
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
@@ -32,17 +41,10 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
-    void leaveEvent(QEvent *event) override;
+//    void leaveEvent(QEvent *event) override;
 
 private:
-    CityLayoutElement *imageAt(const QPoint &position) const;
-    void setHoveredImage(CityLayoutElement *image);
-    void setSelectedImage(CityLayoutElement *image);
-    void updateElementHighLite(CityLayoutElement *image);
-    void clearImageReferences(CityLayoutElement *image);
-
     CityLayoutElements _LayoutElements;
-    CityLayoutElement *_DraggedElement = nullptr;
     QPoint m_dragOffset;
     QPoint m_mousePressPosition;
     QPoint m_lastPanPosition;

@@ -1,3 +1,4 @@
+
 #include "CityLayoutElement.h"
 
 #include <QtMath>

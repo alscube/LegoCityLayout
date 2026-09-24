@@ -1,5 +1,5 @@
 
-#include "LayoutElementWidget.h"
+#include "LayoutElement.h"
 
 #include <QApplication>
 #include <QDrag>
@@ -14,7 +14,7 @@ constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
 constexpr int dragThumbnailSize = 120;
 }
 
-LayoutElementWidget::LayoutElementWidget(const QString &name,
+LayoutElement::LayoutElement(const QString &name,
                                          const QString &resourcePath,
                                          QWidget *parent)
     : QWidget(parent), m_resourcePath(resourcePath)
@@ -44,7 +44,7 @@ LayoutElementWidget::LayoutElementWidget(const QString &name,
     layout->addWidget(label);
 }
 
-void LayoutElementWidget::mousePressEvent(QMouseEvent *event)
+void LayoutElement::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
         m_dragStartPosition = event->position().toPoint();
@@ -53,7 +53,7 @@ void LayoutElementWidget::mousePressEvent(QMouseEvent *event)
     QWidget::mousePressEvent(event);
 }
 
-void LayoutElementWidget::mouseMoveEvent(QMouseEvent *event)
+void LayoutElement::mouseMoveEvent(QMouseEvent *event)
 {
     if (!(event->buttons() & Qt::LeftButton)
         || (event->position().toPoint() - m_dragStartPosition).manhattanLength()
@@ -83,7 +83,7 @@ void LayoutElementWidget::mouseMoveEvent(QMouseEvent *event)
     setCursor(Qt::OpenHandCursor);
 }
 
-void LayoutElementWidget::mouseReleaseEvent(QMouseEvent *event)
+void LayoutElement::mouseReleaseEvent(QMouseEvent *event)
 {
     setCursor(Qt::OpenHandCursor);
     QWidget::mouseReleaseEvent(event);

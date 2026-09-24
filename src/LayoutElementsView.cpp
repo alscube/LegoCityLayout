@@ -1,7 +1,7 @@
 
 #include "LayoutElementsView.h"
 
-#include "LayoutElementWidget.h"
+#include "LayoutElement.h"
 #include "LayoutElementsList.h"
 
 #include <QVBoxLayout>
@@ -20,7 +20,7 @@ void LayoutElementsView::addLayoutElements()
     auto *layout = new QVBoxLayout(this);
     const LayoutElementsList elementsList(this);
 
-    for (LayoutElementWidget *element : elementsList.elements()) {
+    for (LayoutElement *element : elementsList.elements()) {
         layout->addWidget(element, 0, Qt::AlignHCenter);
     }
 

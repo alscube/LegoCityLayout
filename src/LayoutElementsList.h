@@ -2,7 +2,7 @@
 
 #include <QList>
 
-class LayoutElementWidget;
+class LayoutElement;
 class QWidget;
 
 class LayoutElementsList final
@@ -10,8 +10,8 @@ class LayoutElementsList final
 public:
     explicit LayoutElementsList(QWidget *parent);
 
-    const QList<LayoutElementWidget *> &elements() const;
+    const QList<LayoutElement *> &elements() const;
 
 private:
-    QList<LayoutElementWidget *> m_elements;
+    QList<LayoutElement *> m_elements;
 };

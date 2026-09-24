@@ -6,10 +6,10 @@
 
 class QMouseEvent;
 
-class LayoutElementWidget final : public QWidget
+class LayoutElement final : public QWidget
 {
 public:
-    LayoutElementWidget(const QString &name, const QString &resourcePath,
+    LayoutElement(const QString &name, const QString &resourcePath,
                         QWidget *parent = nullptr);
 
 protected:
