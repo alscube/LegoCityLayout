@@ -3,13 +3,20 @@
 
 #include <QtMath>
 
-CityLayoutElement::CityLayoutElement(const QPixmap &pixmap,
+CityLayoutElement::CityLayoutElement(const QString &name,
+                                     const QPixmap &pixmap,
                                      qreal zoomFactor,
                                      QWidget *parent)
-    : QLabel(parent), m_originalPixmap(pixmap)
+    : QLabel(parent), m_name(name), m_originalPixmap(pixmap)
 {
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setZoomFactor(zoomFactor);
+}
+
+
+QString CityLayoutElement::name() const
+{
+    return m_name;
 }
 
 

@@ -10,6 +10,23 @@
 
 constexpr int snapDistance = 6;
 
+QString CityLayoutElements::projectTitle() const
+{
+    return _ProjectTitle;
+}
+
+
+void CityLayoutElements::startProject(const QString &title)
+{
+    while (!isEmpty()) {
+        delete takeLast();
+    }
+
+    _SelectedElement = nullptr;
+    _DraggedElement = nullptr;
+    _ProjectTitle = title;
+}
+
 
 
 CityLayoutElement* CityLayoutElements::elementAt( const QPoint &position ) const
@@ -21,29 +38,6 @@ CityLayoutElement* CityLayoutElements::elementAt( const QPoint &position ) const
         }
     }
     return nullptr;
-}
-
-
-CityLayoutElement *CityLayoutElements::hoveredElement() const
-{
-    return _SelectedElement; // _HoveredElement;
-}
-
-
-void CityLayoutElements::setHoveredElement( CityLayoutElement* newElement )
-{
-    setSelectedElement( newElement );
-
-    // CityLayoutElement* previousElement( _HoveredElement );
-    // if (previousElement == newElement ) {
-    //     return;
-    // }
-
-    // setSelectedElement( nullptr );
-
-    // _HoveredElement = newElement;
-    // updateElementHighLite( previousElement );
-    // updateElementHighLite( newElement );
 }
 
 
@@ -79,10 +73,7 @@ void CityLayoutElements::updateElementHighLite(CityLayoutElement* element)
         return;
     }
 
-    if ( _SelectedElement )
-       _SelectedElement->setStyleSheet(QString());
-
-    const bool highlighted = (element == _HoveredElement || element == _SelectedElement);
+    const bool highlighted = (element == _SelectedElement);
 
     element->setStyleSheet(highlighted
                                ? QStringLiteral("border: 2px solid orange;")
@@ -92,7 +83,7 @@ void CityLayoutElements::updateElementHighLite(CityLayoutElement* element)
 
 bool CityLayoutElements::deleteSelectedElement( )
 {
-    CityLayoutElement *image = ( selectedElement() ? selectedElement() : hoveredElement() );
+    CityLayoutElement *image = selectedElement();
     if (image) {
         deleteImage(image);
         return true;
@@ -246,14 +237,14 @@ void CityLayoutElements::deleteImage(CityLayoutElement *image)
     }
 
     removeAll(image);
-    if (_HoveredElement == image) {
-        _HoveredElement = nullptr;
-    }
+
     if (_SelectedElement == image) {
         _SelectedElement = nullptr;
     }
+
     if (_DraggedElement == image) {
         _DraggedElement = nullptr;
     }
+
     delete image;
 }

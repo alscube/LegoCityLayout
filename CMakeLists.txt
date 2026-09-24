@@ -19,6 +19,12 @@ qt_add_executable(LegoCityLayout
     src/CityLayoutElement.h
     src/CityLayoutElements.cpp
     src/CityLayoutElements.h
+    src/TableDefinition.cpp
+    src/TableDefinition.h
+    src/TableDefinitionEditor.cpp
+    src/TableDefinitionEditor.h
+    src/TableSurface.cpp
+    src/TableSurface.h
     src/LayoutElement.cpp
     src/LayoutElement.h
     src/LayoutElementsView.cpp

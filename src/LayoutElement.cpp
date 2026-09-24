@@ -11,13 +11,14 @@
 
 namespace {
 constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
+constexpr auto layoutElementNameMimeType = "application/x-legocity-layout-element-name";
 constexpr int dragThumbnailSize = 120;
 }
 
 LayoutElement::LayoutElement(const QString &name,
                                          const QString &resourcePath,
                                          QWidget *parent)
-    : QWidget(parent), m_resourcePath(resourcePath)
+    : QWidget(parent), m_name(name), m_resourcePath(resourcePath)
 {
     setCursor(Qt::OpenHandCursor);
     setObjectName(QStringLiteral("layoutElementWidget"));
@@ -64,6 +65,7 @@ void LayoutElement::mouseMoveEvent(QMouseEvent *event)
 
     auto *mimeData = new QMimeData;
     mimeData->setData(layoutElementMimeType, m_resourcePath.toUtf8());
+    mimeData->setData(layoutElementNameMimeType, m_name.toUtf8());
 
     auto *drag = new QDrag(this);
     drag->setMimeData(mimeData);

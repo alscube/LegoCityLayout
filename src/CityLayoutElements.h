@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QString>
 
 
 class CityLayoutElement;
@@ -16,10 +17,10 @@ class CityLayoutElements final : public QList<CityLayoutElement *>
 public:
     using QList<CityLayoutElement *>::QList;
 
-    CityLayoutElement* elementAt(const QPoint &position) const;
+    QString projectTitle() const;
+    void startProject(const QString &title);
 
-    CityLayoutElement *hoveredElement() const;
-    void setHoveredElement( CityLayoutElement* newElement );
+    CityLayoutElement* elementAt(const QPoint &position) const;
 
     CityLayoutElement* selectedElement() const;
     void setSelectedElement(CityLayoutElement* newElement);
@@ -43,7 +44,7 @@ public:
     void deleteImage(CityLayoutElement *image);
 
 private:
-    CityLayoutElement *_HoveredElement = nullptr;
+    QString _ProjectTitle;
     CityLayoutElement *_SelectedElement = nullptr;
     CityLayoutElement *_DraggedElement = nullptr;
 };

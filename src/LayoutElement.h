@@ -18,6 +18,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+    QString m_name;
     QString m_resourcePath;
     QPoint m_dragStartPosition;
 };
