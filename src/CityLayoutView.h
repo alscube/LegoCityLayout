@@ -2,9 +2,7 @@
 
 #include "CityLayoutElements.h"
 #include "TableDefinition.h"
-#include "TableDefinitionEditor.h"
 
-#include <QPalette>
 #include <QPoint>
 #include <QWidget>
 
@@ -13,7 +11,6 @@ class QDropEvent;
 class QContextMenuEvent;
 class QEvent;
 class QKeyEvent;
-class QLabel;
 class QMouseEvent;
 class QWheelEvent;
 class CityLayoutElement;
@@ -24,14 +21,11 @@ class CityLayoutView final : public QWidget
     Q_OBJECT
 
 public:
-    explicit CityLayoutView(QWidget *parent = nullptr);
+    explicit CityLayoutView(TableDefinition &tableDefinition,
+                            QWidget *parent = nullptr);
 
     void startProject(const QString &title);
     QString projectTitle() const;
-
-    // TableDefinition &tableDefinition();
-    // const TableDefinition &tableDefinition() const;
-    void beginTableDefinition();
 
     bool mouseDragged() const { return m_mouseDragged; }
     void setMouseDragged(bool dragged) { m_mouseDragged = dragged; }
@@ -41,11 +35,6 @@ public:
 
     QPoint dragOffset() const { return m_dragOffset; }
     void setDragOffset(const QPoint &offset) { m_dragOffset = offset; }
-
-signals:
-    void createNewLayoutRequested();
-    void openLayoutRequested();
-    void openLastLayoutRequested();
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -63,11 +52,7 @@ private:
     void panBy(const QPoint &offset);
 
     CityLayoutElements _LayoutElements;
-    TableDefinition m_tableDefinition;
-    TableDefinitionEditor m_tableDefinitionEditor;
-    QPalette m_layoutPalette;
-    QLabel *m_titleLabel = nullptr;
-    QWidget *m_startupPanel = nullptr;
+    TableDefinition &m_tableDefinition;
     QPoint m_dragOffset;
     QPoint m_mousePressPosition;
     QPoint m_lastPanPosition;

@@ -1,13 +1,11 @@
 #include "mainwindow.h"
 
-#include "CityLayoutView.h"
 #include "LayoutElementsView.h"
 #include "Preferences.h"
+#include "ProjectView.h"
 
 #include <QAction>
-#include <QInputDialog>
 #include <QKeySequence>
-#include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
 #include <QSplitter>
@@ -16,25 +14,35 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_splitter(new QSplitter(Qt::Horizontal, this))
-    , m_cityLayoutView(new CityLayoutView(m_splitter))
+    , m_projectView(new ProjectView(m_splitter))
 {
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
     QAction *newProjectAction = fileMenu->addAction(tr("&New..."));
     newProjectAction->setShortcut(QKeySequence::New);
     connect(newProjectAction, &QAction::triggered,
-            this, &MainWindow::createNewLayout);
+            m_projectView, &ProjectView::promptToCreateProject);
 
     QMenu *tableMenu = menuBar()->addMenu(tr("&Table"));
+
     QAction *defineTableAction = tableMenu->addAction(tr("Define Table Outline..."));
     connect(defineTableAction, &QAction::triggered,
             this, &MainWindow::defineTableOutline);
-    connect(m_cityLayoutView, &CityLayoutView::createNewLayoutRequested,
-            this, &MainWindow::createNewLayout);
-    connect(m_cityLayoutView, &CityLayoutView::openLayoutRequested,
+
+    QAction *showLayoutAction = tableMenu->addAction(tr("Show City Layout"));
+    connect(showLayoutAction, &QAction::triggered, this, &MainWindow::showCityLayout);
+
+    // connect(m_projectView, &ProjectView::projectStarted,
+    //         this, [this](const QString &title) {
+    //             setWindowTitle(tr("%1 - LegoCityLayout").arg(title));
+    //             statusBar()->showMessage(
+    //                 tr("Press and drag from an endpoint to draw a side. Release on the starting point to close; Esc cancels and Delete undoes."));
+    //         });
+
+    connect(m_projectView, &ProjectView::openLayoutRequested,
             this, [this] {
                 statusBar()->showMessage(tr("Opening layouts is not available yet"), 3000);
             });
-    connect(m_cityLayoutView, &CityLayoutView::openLastLayoutRequested,
+    connect(m_projectView, &ProjectView::openLastLayoutRequested,
             this, [this] {
                 statusBar()->showMessage(tr("There is no saved layout to open yet"), 3000);
             });
@@ -43,7 +51,7 @@ MainWindow::MainWindow(QWidget *parent)
     layoutElements->addLayoutElements( );
     m_splitter->addWidget( layoutElements );
 
-    m_splitter->addWidget(m_cityLayoutView);
+    m_splitter->addWidget(m_projectView);
     m_splitter->setChildrenCollapsible(false);
     m_splitter->setHandleWidth(8);
     m_splitter->setStyleSheet(
@@ -60,8 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(m_splitter);
     setWindowTitle(tr("Lego City Layout"));
     resize(1000, 700);
-    statusBar()->showMessage(tr("Drag the divider to resize the panels"));
 }
+
 
 MainWindow::~MainWindow()
 {
@@ -69,35 +77,18 @@ MainWindow::~MainWindow()
 }
 
 
-void MainWindow::createNewLayout()
+void MainWindow::defineTableOutline()
 {
-    bool accepted = false;
-    const QString title = QInputDialog::getText(
-        this,
-        tr("New Layout"),
-        tr("Layout title:"),
-        QLineEdit::Normal,
-        QString(),
-        &accepted).trimmed();
-
-    if (!accepted || title.isEmpty()) {
+    if (m_projectView->projectTitle().isEmpty()) {
+        statusBar()->showMessage(tr("Please load or create a new layout before defining its table"));
         return;
     }
 
-    m_cityLayoutView->startProject(title);
-    setWindowTitle(tr("%1 - LegoCityLayout").arg(title));
-    defineTableOutline();
+    m_projectView->defineTableOutline();
 }
 
 
-void MainWindow::defineTableOutline()
+void MainWindow::showCityLayout()
 {
-    if (m_cityLayoutView->projectTitle().isEmpty()) {
-        statusBar()->showMessage(tr("Create a layout before defining its table"), 3000);
-        return;
-    }
-
-    m_cityLayoutView->beginTableDefinition();
-    statusBar()->showMessage(
-        tr("Press and drag from an endpoint to draw a side. Release on the starting point to close; Esc cancels and Delete undoes."));
+    m_projectView->showCityLayout();
 }

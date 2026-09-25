@@ -1,4 +1,4 @@
-#include "TableDefinitionEditor.h"
+#include "TableDefinitionEditorView.h"
 
 #include "TableDefinition.h"
 #include "TableSurface.h"
@@ -7,17 +7,24 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineF>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPushButton>
 #include <QWidget>
+#include <QVBoxLayout>
 #include <QtMath>
 
 #include <cmath>
 
 namespace {
 constexpr qreal pixelsPerInch = 12.8;
+constexpr qreal gridSizeInches = 10.0;
+constexpr qreal gridVisualScale = 0.5;
+constexpr qreal gridSpacing = pixelsPerInch * gridSizeInches * gridVisualScale;
 constexpr qreal closePointDistance = 14.0;
 constexpr qreal sideSelectionDistance = 8.0;
 
@@ -83,58 +90,117 @@ bool getSideMeasurements(QWidget *parent, qreal suggestedLength,
 }
 }
 
-TableDefinitionEditor::TableDefinitionEditor(TableDefinition &definition)
-    : m_definition(definition)
+TableDefinitionEditorView::TableDefinitionEditorView(TableDefinition &definition,
+                                             QWidget *parent)
+    : QWidget(parent)
+    , m_definition(definition)
 {
+    setFocusPolicy(Qt::StrongFocus);
+    setMouseTracking(true);
+    setAutoFillBackground(true);
+
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    auto *header = new QWidget(this);
+    auto *headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(0, 0, 10, 0);
+    headerLayout->setSpacing(8);
+
+    auto *titleLabel = new QLabel(tr("Table Definition"), header);
+    titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    titleLabel->setContentsMargins(14, 10, 14, 10);
+    titleLabel->setStyleSheet(
+        "QLabel { background-color: palette(window); "
+        "font-size: 22px; font-weight: 700; }");
+    headerLayout->addWidget(titleLabel);
+    headerLayout->addStretch();
+
+    auto *gridButton = new QPushButton(tr("Hide Grid"), header);
+    gridButton->setCheckable(true);
+    gridButton->setChecked(true);
+    gridButton->setToolTip(tr("Show or hide the 10-inch grid"));
+    headerLayout->addWidget(gridButton);
+
+    auto *snapButton = new QPushButton(tr("Snap to Grid"), header);
+    snapButton->setCheckable(true);
+    snapButton->setChecked(true);
+    snapButton->setToolTip(tr("Snap drawn endpoints to grid intersections"));
+    headerLayout->addWidget(snapButton);
+
+    connect(gridButton, &QPushButton::toggled,
+            this, [this, gridButton](bool checked) {
+        m_gridVisible = checked;
+        gridButton->setText(checked ? tr("Hide Grid") : tr("Show Grid"));
+        update();
+    });
+    connect(snapButton, &QPushButton::toggled, this, [this](bool checked) {
+        m_snapToGrid = checked;
+        if (m_drawingSide) {
+            m_cursor = snappedPoint(m_cursor);
+        }
+        update();
+    });
+
+    layout->addWidget(header);
+    layout->addStretch();
+
+    auto *instructions = new QLabel(
+        tr("Press and drag from an endpoint to draw a side. Release on the "
+           "starting point to close; Esc cancels and Delete undoes."), this);
+    instructions->setAlignment(Qt::AlignCenter);
+    instructions->setContentsMargins(12, 10, 12, 10);
+    instructions->setStyleSheet(
+        "QLabel { background-color: palette(window); "
+        "border-top: 1px solid palette(mid); font-weight: 600; }");
+    layout->addWidget(instructions);
 }
 
-void TableDefinitionEditor::begin(QWidget *view)
+void TableDefinitionEditorView::begin()
 {
     m_draft.clear();
     m_selectedSurface = -1;
     m_selectedSide = -1;
     m_active = true;
     m_drawingSide = false;
-    view->setCursor(Qt::CrossCursor);
-    view->setFocus(Qt::OtherFocusReason);
-    view->update();
+    setCursor(Qt::CrossCursor);
+    setFocus(Qt::OtherFocusReason);
+    update();
 }
 
-void TableDefinitionEditor::reset(QWidget *view)
+void TableDefinitionEditorView::reset()
 {
     m_draft.clear();
     m_active = false;
     m_drawingSide = false;
     m_selectedSurface = -1;
     m_selectedSide = -1;
-    view->unsetCursor();
-    view->update();
+    unsetCursor();
+    update();
 }
 
-void TableDefinitionEditor::resetViewScale()
+void TableDefinitionEditorView::resetViewScale()
 {
     m_viewScale = 1.0;
 }
 
-void TableDefinitionEditor::translate(const QPointF &offset)
+QPointF TableDefinitionEditorView::snappedPoint(const QPointF &point) const
 {
-    m_draft.translate(offset);
-    m_cursor += offset;
-}
-
-void TableDefinitionEditor::scale(const QPointF &anchor, qreal factor)
-{
-    for (QPointF &point : m_draft) {
-        point = anchor + (point - anchor) * factor;
+    if (!m_snapToGrid) {
+        return point;
     }
-    m_cursor = anchor + (m_cursor - anchor) * factor;
-    m_viewScale *= factor;
+
+    const qreal spacing = gridSpacing * m_viewScale;
+    return QPointF(qRound(point.x() / spacing) * spacing,
+                   qRound(point.y() / spacing) * spacing);
 }
 
-bool TableDefinitionEditor::mousePressEvent(QWidget *view, QMouseEvent *event)
+void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton) {
-        return false;
+        QWidget::mousePressEvent(event);
+        return;
     }
 
     if (!m_active) {
@@ -156,65 +222,67 @@ bool TableDefinitionEditor::mousePressEvent(QWidget *view, QMouseEvent *event)
             }
         }
 
-        view->update();
+        update();
         if (m_selectedSide >= 0) {
-            view->setFocus(Qt::MouseFocusReason);
+            setFocus(Qt::MouseFocusReason);
             event->accept();
-            return true;
+            return;
         }
-        return false;
+        QWidget::mousePressEvent(event);
+        return;
     }
 
     if (m_draft.isEmpty()) {
-        m_draft.append(event->position());
+        m_draft.append(snappedPoint(event->position()));
     } else if (QLineF(event->position(), m_draft.last()).length()
                > closePointDistance) {
         event->accept();
-        return true;
+        return;
     }
 
     m_drawingSide = true;
-    m_cursor = event->position();
-    view->update();
+    m_cursor = snappedPoint(event->position());
+    update();
     event->accept();
-    return true;
 }
 
-bool TableDefinitionEditor::mouseMoveEvent(QWidget *view, QMouseEvent *event)
+void TableDefinitionEditorView::mouseMoveEvent(QMouseEvent *event)
 {
     if (!m_active || !m_drawingSide) {
-        return false;
+        QWidget::mouseMoveEvent(event);
+        return;
     }
 
-    m_cursor = event->position();
-    view->update();
+    m_cursor = snappedPoint(event->position());
+    update();
     event->accept();
-    return true;
 }
 
-bool TableDefinitionEditor::mouseReleaseEvent(QWidget *view, QMouseEvent *event)
+void TableDefinitionEditorView::mouseReleaseEvent(QMouseEvent *event)
 {
     if (!m_active || !m_drawingSide || event->button() != Qt::LeftButton) {
-        return false;
+        QWidget::mouseReleaseEvent(event);
+        return;
     }
 
     m_drawingSide = false;
-    const QPointF releasedPoint = event->position();
+    const QPointF releasedPoint = snappedPoint(event->position());
     if (m_draft.size() >= 3
         && QLineF(releasedPoint, m_draft.first()).length() <= closePointDistance) {
         m_definition.clear();
         m_definition.addSurface(TableSurface(QObject::tr("Table surface"), m_draft));
-        reset(view);
+        reset();
         event->accept();
-        return true;
+        emit editingFinished();
+        return;
     }
 
     QLineF side(m_draft.last(), releasedPoint);
     if (side.length() < 1.0) {
         m_cursor = m_draft.last();
-        view->update();
+        update();
         event->accept();
-        return true;
+        return;
     }
 
     qreal inches = side.length() / (pixelsPerInch * m_viewScale);
@@ -224,27 +292,26 @@ bool TableDefinitionEditor::mouseReleaseEvent(QWidget *view, QMouseEvent *event)
     } else {
         screenAngle = side.dy() >= 0.0 ? 90.0 : 270.0;
     }
-    if (!getSideMeasurements(view, inches, screenAngle,
+    if (!getSideMeasurements(this, inches, screenAngle,
                              inches, screenAngle)) {
         m_cursor = m_draft.last();
-        view->update();
+        update();
         event->accept();
-        return true;
+        return;
     }
 
     const qreal length = inches * pixelsPerInch * m_viewScale;
     const qreal heading = qDegreesToRadians(screenAngle);
-    const QPointF newPoint = m_draft.last()
-                              + QPointF(length * std::cos(heading),
-                                        length * std::sin(heading));
+    const QPointF newPoint = snappedPoint(
+        m_draft.last() + QPointF(length * std::cos(heading),
+                                 length * std::sin(heading)));
     m_draft.append(newPoint);
     m_cursor = newPoint;
-    view->update();
+    update();
     event->accept();
-    return true;
 }
 
-bool TableDefinitionEditor::keyPressEvent(QWidget *view, QKeyEvent *event)
+void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
 {
     if (!m_active) {
         if (event->key() == Qt::Key_Delete && m_selectedSurface >= 0
@@ -263,41 +330,64 @@ bool TableDefinitionEditor::keyPressEvent(QWidget *view, QKeyEvent *event)
             m_active = true;
             m_selectedSurface = -1;
             m_selectedSide = -1;
-            view->setCursor(Qt::CrossCursor);
-            view->update();
+            setCursor(Qt::CrossCursor);
+            update();
             event->accept();
-            return true;
+            return;
         }
-        return false;
+        QWidget::keyPressEvent(event);
+        return;
     }
 
     if (event->key() == Qt::Key_Escape) {
-        reset(view);
+        reset();
         event->accept();
-        return true;
+        emit editingFinished();
+        return;
     }
 
     if (event->key() == Qt::Key_Backspace && !m_draft.isEmpty()) {
         m_draft.removeLast();
-        view->update();
+        update();
         event->accept();
-        return true;
+        return;
     }
 
     if (event->key() == Qt::Key_Delete) {
         if (m_draft.size() > 1) {
             m_draft.removeLast();
             m_cursor = m_draft.last();
-            view->update();
+            update();
         }
         event->accept();
-        return true;
+        return;
     }
 
-    return false;
+    QWidget::keyPressEvent(event);
 }
 
-void TableDefinitionEditor::paint(QPainter &painter) const
+void TableDefinitionEditorView::paintEvent(QPaintEvent *event)
+{
+    QWidget::paintEvent(event);
+    QPainter painter(this);
+
+    if (m_gridVisible) {
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
+        const qreal scaledGridSpacing = gridSpacing * m_viewScale;
+        for (qreal x = 0.0; x <= width(); x += scaledGridSpacing) {
+            painter.drawLine(QPointF(x, 0.0), QPointF(x, height()));
+        }
+        for (qreal y = 0.0; y <= height(); y += scaledGridSpacing) {
+            painter.drawLine(QPointF(0.0, y), QPointF(width(), y));
+        }
+    }
+
+    painter.setRenderHint(QPainter::Antialiasing);
+    paintDefinition(painter);
+}
+
+void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
 {
     if (!m_definition.isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));

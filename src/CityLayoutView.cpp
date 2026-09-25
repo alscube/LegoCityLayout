@@ -15,9 +15,8 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
-#include <QPushButton>
-#include <QVBoxLayout>
 #include <QWheelEvent>
+#include <QVBoxLayout>
 
 #include <cmath>
 
@@ -35,62 +34,35 @@ constexpr qreal gridSpacing = pixelsPerInch * gridSizeInches * gridVisualScale;
 }
 
 
-CityLayoutView::CityLayoutView(QWidget *parent)
+CityLayoutView::CityLayoutView(TableDefinition &tableDefinition, QWidget *parent)
     : QWidget(parent)
-    , m_tableDefinitionEditor(m_tableDefinition)
+    , m_tableDefinition(tableDefinition)
 {
     setMinimumWidth(150);
     setAcceptDrops(true);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
 
-    m_layoutPalette = palette();
-    QPalette startupPalette = m_layoutPalette;
-    startupPalette.setColor(QPalette::Window, QColor(52, 52, 52));
-    setAutoFillBackground(true);
-    setPalette(startupPalette);
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
-    auto *viewLayout = new QVBoxLayout(this);
-    viewLayout->addStretch();
-
-    m_startupPanel = new QWidget(this);
-    m_startupPanel->setMaximumWidth(280);
-    auto *buttonLayout = new QVBoxLayout(m_startupPanel);
-    buttonLayout->setSpacing(12);
-
-    auto *createButton = new QPushButton(tr("Create New Layout"), m_startupPanel);
-    auto *openButton = new QPushButton(tr("Open Layout"), m_startupPanel);
-    auto *openLastButton = new QPushButton(tr("Open Last Layout"), m_startupPanel);
-    buttonLayout->addWidget(createButton);
-    buttonLayout->addWidget(openButton);
-    buttonLayout->addWidget(openLastButton);
-
-    connect(createButton, &QPushButton::clicked,
-            this, &CityLayoutView::createNewLayoutRequested);
-    connect(openButton, &QPushButton::clicked,
-            this, &CityLayoutView::openLayoutRequested);
-    connect(openLastButton, &QPushButton::clicked,
-            this, &CityLayoutView::openLastLayoutRequested);
-
-    viewLayout->addWidget(m_startupPanel, 0, Qt::AlignHCenter);
-    viewLayout->addStretch();
+    auto *titleLabel = new QLabel(tr("City Layout"), this);
+    titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    titleLabel->setContentsMargins(14, 10, 14, 10);
+    titleLabel->setStyleSheet(
+        "QLabel { background-color: palette(window); "
+        "font-size: 22px; font-weight: 700; }");
+    layout->addWidget(titleLabel);
+    layout->addStretch();
 }
 
 
 void CityLayoutView::startProject(const QString &title)
 {
     _LayoutElements.startProject(title);
-    m_tableDefinition.clear();
-    m_tableDefinitionEditor.reset(this);
-    m_tableDefinitionEditor.resetViewScale();
     m_gridOrigin = QPointF();
     m_zoomFactor = 1.0;
-    setPalette(m_layoutPalette);
-    if (m_titleLabel) {
-        m_titleLabel->setText(title);
-        m_titleLabel->adjustSize();
-    }
-    m_startupPanel->hide();
     update();
 }
 
@@ -98,24 +70,6 @@ void CityLayoutView::startProject(const QString &title)
 QString CityLayoutView::projectTitle() const
 {
     return _LayoutElements.projectTitle();
-}
-
-
-// TableDefinition &CityLayoutView::tableDefinition()
-// {
-//     return m_tableDefinition;
-// }
-
-
-// const TableDefinition &CityLayoutView::tableDefinition() const
-// {
-//     return m_tableDefinition;
-// }
-
-
-void CityLayoutView::beginTableDefinition()
-{
-    m_tableDefinitionEditor.begin(this);
 }
 
 
@@ -162,10 +116,6 @@ void CityLayoutView::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (m_tableDefinitionEditor.mousePressEvent(this, event)) {
-        return;
-    }
-
     if (event->buttons().testFlag(Qt::LeftButton))
     {
         const QPoint position = event->position().toPoint();
@@ -194,10 +144,6 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
         panBy(position - m_lastPanPosition);
         m_lastPanPosition = position;
         event->accept();
-        return;
-    }
-
-    if (m_tableDefinitionEditor.mouseMoveEvent(this, event)) {
         return;
     }
 
@@ -250,10 +196,6 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
 
-    if (m_tableDefinitionEditor.mouseReleaseEvent(this, event)) {
-        return;
-    }
-
     Qt::MouseButtons button( event->button() );
     if (button == Qt::LeftButton )
     {
@@ -302,7 +244,6 @@ void CityLayoutView::wheelEvent(QWheelEvent *event)
 
     _LayoutElements.zoomAllElements( anchor, relativeScale, newZoom );
     m_tableDefinition.scale(anchor, relativeScale);
-    m_tableDefinitionEditor.scale(anchor, relativeScale);
     m_gridOrigin = anchor + (m_gridOrigin - anchor) * relativeScale;
 
     m_zoomFactor = newZoom;
@@ -317,7 +258,6 @@ void CityLayoutView::panBy(const QPoint &offset)
         image->move(image->pos() + offset);
     }
     m_tableDefinition.translate(offset);
-    m_tableDefinitionEditor.translate(offset);
     m_gridOrigin += offset;
     update();
 }
@@ -325,10 +265,6 @@ void CityLayoutView::panBy(const QPoint &offset)
 
 void CityLayoutView::keyPressEvent(QKeyEvent *event)
 {
-    if (m_tableDefinitionEditor.keyPressEvent(this, event)) {
-        return;
-    }
-
     if (event->key() == Qt::Key_Delete )
     {
         if ( _LayoutElements.deleteSelectedElement() )
@@ -364,8 +300,11 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
     }
 
     painter.setRenderHint(QPainter::Antialiasing);
-
-    m_tableDefinitionEditor.paint(painter);
+    if (!m_tableDefinition.isEmpty()) {
+        painter.setPen(QPen(QColor(80, 55, 30), 3));
+        painter.setBrush(QColor(181, 143, 92, 120));
+        painter.drawPath(m_tableDefinition.usableArea());
+    }
 }
 
 

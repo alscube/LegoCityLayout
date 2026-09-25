@@ -13,6 +13,10 @@ qt_add_executable(LegoCityLayout
     src/main.cpp
     src/mainwindow.cpp
     src/mainwindow.h
+    src/ProjectView.cpp
+    src/ProjectView.h
+    src/OpenOrCreateProjectView.cpp
+    src/OpenOrCreateProjectView.h
     src/CityLayoutView.cpp
     src/CityLayoutView.h
     src/CityLayoutElement.cpp
@@ -21,8 +25,8 @@ qt_add_executable(LegoCityLayout
     src/CityLayoutElements.h
     src/TableDefinition.cpp
     src/TableDefinition.h
-    src/TableDefinitionEditor.cpp
-    src/TableDefinitionEditor.h
+    src/TableDefinitionEditorView.cpp
+    src/TableDefinitionEditorView.h
     src/TableSurface.cpp
     src/TableSurface.h
     src/LayoutElement.cpp

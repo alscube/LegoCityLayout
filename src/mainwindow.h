@@ -3,7 +3,7 @@
 #include <QMainWindow>
 
 class QSplitter;
-class CityLayoutView;
+class ProjectView;
 
 class MainWindow final : public QMainWindow
 {
@@ -14,9 +14,9 @@ public:
     ~MainWindow() override;
 
 private:
-    void createNewLayout();
     void defineTableOutline();
+    void showCityLayout();
 
     QSplitter *m_splitter = nullptr;
-    CityLayoutView *m_cityLayoutView = nullptr;
+    ProjectView *m_projectView = nullptr;
 };
