@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
@@ -35,8 +36,11 @@ qt_add_executable(LegoCityLayout
     src/LayoutElementsView.h
     src/LayoutElementsList.cpp
     src/LayoutElementsList.h
-    src/Preferences.cpp
-    src/Preferences.h
+    src/UserSettings.cpp
+    src/UserSettings.h
+    src/SettingsDialog.cpp
+    src/SettingsDialog.h
+    src/SettingsDialog.ui
     resources.qrc
 )
 

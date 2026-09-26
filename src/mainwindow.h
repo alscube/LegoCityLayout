@@ -14,8 +14,12 @@ public:
     ~MainWindow() override;
 
 private:
+    void SetupMainMenu( );
+    void CreateSplitterView( );
+
     void defineTableOutline();
     void showCityLayout();
+    void showSettings();
 
     QSplitter *m_splitter = nullptr;
     ProjectView *m_projectView = nullptr;

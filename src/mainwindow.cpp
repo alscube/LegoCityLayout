@@ -1,10 +1,13 @@
 #include "mainwindow.h"
 
 #include "LayoutElementsView.h"
-#include "Preferences.h"
 #include "ProjectView.h"
+#include "SettingsDialog.h"
+#include "TableDefinitionEditorView.h"
+#include "UserSettings.h"
 
 #include <QAction>
+#include <QApplication>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
@@ -16,27 +19,50 @@ MainWindow::MainWindow(QWidget *parent)
     , m_splitter(new QSplitter(Qt::Horizontal, this))
     , m_projectView(new ProjectView(m_splitter))
 {
+    SetupMainMenu( );
+
+    CreateSplitterView( );
+
+    setWindowTitle(tr("Lego City Layout"));
+
+    // restore application size and position
+    const QByteArray savedGeometry = UserSettings::instance().mainWindowGeometry();
+    if (!savedGeometry.isEmpty()) {
+        restoreGeometry(savedGeometry);
+    }
+    else
+        resize(1000, 700);
+}
+
+
+MainWindow::~MainWindow()
+{
+    UserSettings::instance().setMainWindowGeometry(saveGeometry());
+    UserSettings::instance().setSplitterState(m_splitter->saveState());
+}
+
+
+void MainWindow::SetupMainMenu( )
+{
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
     QAction *newProjectAction = fileMenu->addAction(tr("&New..."));
     newProjectAction->setShortcut(QKeySequence::New);
     connect(newProjectAction, &QAction::triggered,
             m_projectView, &ProjectView::promptToCreateProject);
 
-    QMenu *tableMenu = menuBar()->addMenu(tr("&Table"));
+    QMenu *tableMenu = menuBar()->addMenu(tr("&View"));
 
-    QAction *defineTableAction = tableMenu->addAction(tr("Define Table Outline..."));
+    QAction *defineTableAction = tableMenu->addAction(tr("Edit Table Outline..."));
     connect(defineTableAction, &QAction::triggered,
             this, &MainWindow::defineTableOutline);
 
     QAction *showLayoutAction = tableMenu->addAction(tr("Show City Layout"));
     connect(showLayoutAction, &QAction::triggered, this, &MainWindow::showCityLayout);
 
-    // connect(m_projectView, &ProjectView::projectStarted,
-    //         this, [this](const QString &title) {
-    //             setWindowTitle(tr("%1 - LegoCityLayout").arg(title));
-    //             statusBar()->showMessage(
-    //                 tr("Press and drag from an endpoint to draw a side. Release on the starting point to close; Esc cancels and Delete undoes."));
-    //         });
+    QMenu *settingsMenu = menuBar()->addMenu(tr("&Settings"));
+    QAction *settingsAction = settingsMenu->addAction(tr("Settings..."));
+    settingsAction->setMenuRole(QAction::PreferencesRole);
+    connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
 
     connect(m_projectView, &ProjectView::openLayoutRequested,
             this, [this] {
@@ -46,34 +72,34 @@ MainWindow::MainWindow(QWidget *parent)
             this, [this] {
                 statusBar()->showMessage(tr("There is no saved layout to open yet"), 3000);
             });
+}
 
+
+void MainWindow::CreateSplitterView( )
+{
+    // left side: layout elements view
     LayoutElementsView *layoutElements = new LayoutElementsView();
     layoutElements->addLayoutElements( );
     m_splitter->addWidget( layoutElements );
 
+    // right side: project view
     m_splitter->addWidget(m_projectView);
     m_splitter->setChildrenCollapsible(false);
     m_splitter->setHandleWidth(8);
     m_splitter->setStyleSheet(
         "QSplitter::handle { background-color: #707070; }"
         "QSplitter::handle:hover { background-color: #3d8ec9; }"
-    );
+        );
+
     m_splitter->setSizes({500, 500});
 
-    const QByteArray savedState = Preferences::instance().splitterState();
+    // restore splitter state from preferences if available
+    const QByteArray savedState = UserSettings::instance().splitterState();
     if (!savedState.isEmpty()) {
         m_splitter->restoreState(savedState);
     }
 
     setCentralWidget(m_splitter);
-    setWindowTitle(tr("Lego City Layout"));
-    resize(1000, 700);
-}
-
-
-MainWindow::~MainWindow()
-{
-    Preferences::instance().setSplitterState(m_splitter->saveState());
 }
 
 
@@ -91,4 +117,19 @@ void MainWindow::defineTableOutline()
 void MainWindow::showCityLayout()
 {
     m_projectView->showCityLayout();
+}
+
+
+void MainWindow::showSettings()
+{
+    SettingsDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        for (QWidget *widget : QApplication::allWidgets()) {
+            if (auto *editor = qobject_cast<TableDefinitionEditorView *>(widget)) {
+                editor->refreshMeasurementUnits();
+            }
+            widget->update();
+        }
+    }
 }

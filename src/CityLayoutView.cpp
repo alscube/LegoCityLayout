@@ -305,6 +305,13 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
         painter.setBrush(QColor(181, 143, 92, 120));
         painter.drawPath(m_tableDefinition.usableArea());
     }
+    if (!m_tableDefinition.openSides().isEmpty()) {
+        painter.setPen(QPen(QColor(80, 55, 30), 3));
+        painter.setBrush(Qt::NoBrush);
+        for (const QLineF &side : m_tableDefinition.openSides()) {
+            painter.drawLine(side);
+        }
+    }
 }
 
 
