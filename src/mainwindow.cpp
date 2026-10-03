@@ -16,8 +16,8 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , m_splitter(new QSplitter(Qt::Horizontal, this))
-    , m_projectView(new ProjectView(m_splitter))
+    , _splitter(new QSplitter(Qt::Horizontal, this))
+    , _projectView(new ProjectView(_splitter))
 {
     SetupMainMenu( );
 
@@ -38,7 +38,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     UserSettings::instance().setMainWindowGeometry(saveGeometry());
-    UserSettings::instance().setSplitterState(m_splitter->saveState());
+    UserSettings::instance().setSplitterState(_splitter->saveState());
 }
 
 
@@ -48,7 +48,18 @@ void MainWindow::SetupMainMenu( )
     QAction *newProjectAction = fileMenu->addAction(tr("&New..."));
     newProjectAction->setShortcut(QKeySequence::New);
     connect(newProjectAction, &QAction::triggered,
-            m_projectView, &ProjectView::promptToCreateProject);
+            _projectView, &ProjectView::promptToCreateProject);
+
+    fileMenu->addSeparator();
+    QAction *closeProjectAction = fileMenu->addAction(tr("&Close"));
+    closeProjectAction->setShortcut(QKeySequence::Close);
+    connect(closeProjectAction, &QAction::triggered,
+            _projectView, &ProjectView::closeProject);
+
+    QAction *saveTableAction = fileMenu->addAction(tr("&Save Lego Layout..."));
+    saveTableAction->setShortcut(QKeySequence::Save);
+    connect(saveTableAction, &QAction::triggered,
+            _projectView, &ProjectView::saveTableDefinition);
 
     QMenu *tableMenu = menuBar()->addMenu(tr("&View"));
 
@@ -64,11 +75,11 @@ void MainWindow::SetupMainMenu( )
     settingsAction->setMenuRole(QAction::PreferencesRole);
     connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
 
-    connect(m_projectView, &ProjectView::openLayoutRequested,
+    connect(_projectView, &ProjectView::openLayoutRequested,
             this, [this] {
                 statusBar()->showMessage(tr("Opening layouts is not available yet"), 3000);
             });
-    connect(m_projectView, &ProjectView::openLastLayoutRequested,
+    connect(_projectView, &ProjectView::openLastLayoutRequested,
             this, [this] {
                 statusBar()->showMessage(tr("There is no saved layout to open yet"), 3000);
             });
@@ -78,45 +89,45 @@ void MainWindow::SetupMainMenu( )
 void MainWindow::CreateSplitterView( )
 {
     // left side: layout elements view
-    LayoutElementsView *layoutElements = new LayoutElementsView();
-    layoutElements->addLayoutElements( );
-    m_splitter->addWidget( layoutElements );
+    _layoutElementsView = new LayoutElementsView();
+    _layoutElementsView->addLayoutElements( );
+    _splitter->addWidget( _layoutElementsView );
 
     // right side: project view
-    m_splitter->addWidget(m_projectView);
-    m_splitter->setChildrenCollapsible(false);
-    m_splitter->setHandleWidth(8);
-    m_splitter->setStyleSheet(
+    _splitter->addWidget(_projectView);
+    _splitter->setChildrenCollapsible(false);
+    _splitter->setHandleWidth(8);
+    _splitter->setStyleSheet(
         "QSplitter::handle { background-color: #707070; }"
         "QSplitter::handle:hover { background-color: #3d8ec9; }"
         );
 
-    m_splitter->setSizes({500, 500});
+    _splitter->setSizes({500, 500});
 
     // restore splitter state from preferences if available
     const QByteArray savedState = UserSettings::instance().splitterState();
     if (!savedState.isEmpty()) {
-        m_splitter->restoreState(savedState);
+        _splitter->restoreState(savedState);
     }
 
-    setCentralWidget(m_splitter);
+    setCentralWidget(_splitter);
 }
 
 
 void MainWindow::defineTableOutline()
 {
-    if (m_projectView->projectTitle().isEmpty()) {
+    if (_projectView->projectTitle().isEmpty()) {
         statusBar()->showMessage(tr("Please load or create a new layout before defining its table"));
         return;
     }
 
-    m_projectView->defineTableOutline();
+    _projectView->defineTableOutline();
 }
 
 
 void MainWindow::showCityLayout()
 {
-    m_projectView->showCityLayout();
+    _projectView->showCityLayout();
 }
 
 

@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 class QSplitter;
+class LayoutElementsView;
 class ProjectView;
 
 class MainWindow final : public QMainWindow
@@ -21,6 +22,7 @@ private:
     void showCityLayout();
     void showSettings();
 
-    QSplitter *m_splitter = nullptr;
-    ProjectView *m_projectView = nullptr;
+    QSplitter *_splitter = nullptr;
+    LayoutElementsView* _layoutElementsView = nullptr;
+    ProjectView* _projectView = nullptr;
 };

@@ -1,3 +1,5 @@
+#include <QBuffer>
+#include <QJsonArray>
 
 #include "CityLayoutView.h"
 #include "CityLayoutElement.h"
@@ -61,6 +63,7 @@ CityLayoutView::CityLayoutView(TableDefinition &tableDefinition, QWidget *parent
 void CityLayoutView::startProject(const QString &title)
 {
     _LayoutElements.startProject(title);
+    m_changeRevision = 0;
     m_gridOrigin = QPointF();
     m_zoomFactor = 1.0;
     update();
@@ -101,6 +104,7 @@ void CityLayoutView::dropEvent(QDropEvent *event)
     layoutElement->move(requestedPosition);
     layoutElement->show();
     _LayoutElements.append(layoutElement);
+    ++m_changeRevision;
 
     event->acceptProposedAction();
 }
@@ -201,6 +205,7 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
     {
         if ( _LayoutElements.elementDragged( this, m_mouseDragged) )
         {
+            ++m_changeRevision;
             m_mouseDragged = false;
             unsetCursor();
             event->accept();
@@ -269,6 +274,7 @@ void CityLayoutView::keyPressEvent(QKeyEvent *event)
     {
         if ( _LayoutElements.deleteSelectedElement() )
         {
+            ++m_changeRevision;
             event->accept();
             return;
         }
@@ -329,7 +335,9 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *deleteAction = menu.addAction(tr("Delete"));
     if (menu.exec(event->globalPos()) == deleteAction) {
-        _LayoutElements.deleteSelectedElement();
+        if (_LayoutElements.deleteSelectedElement()) {
+            ++m_changeRevision;
+        }
     }
     event->accept();
 }
@@ -338,3 +346,28 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
 // {
 //     QWidget::leaveEvent(event);
 // }
+
+QPointF CityLayoutView::projectPoint(const QPointF &point) const
+{
+    return (point - m_gridOrigin) / m_zoomFactor;
+}
+
+QJsonObject CityLayoutView::savedLayout() const
+{
+    QJsonArray elements;
+    for (const CityLayoutElement *element : _LayoutElements) {
+        QByteArray image;
+        QBuffer buffer(&image);
+        buffer.open(QIODevice::WriteOnly);
+        element->pixmap().save(&buffer, "PNG");
+        elements.append(QJsonObject{
+            {QStringLiteral("name"), element->name()},
+            {QStringLiteral("x"), element->x()},
+            {QStringLiteral("y"), element->y()},
+            {QStringLiteral("imagePngBase64"), QString::fromLatin1(image.toBase64())}});
+    }
+    return QJsonObject{{QStringLiteral("elements"), elements},
+                       {QStringLiteral("zoomFactor"), m_zoomFactor},
+                       {QStringLiteral("gridOriginX"), m_gridOrigin.x()},
+                       {QStringLiteral("gridOriginY"), m_gridOrigin.y()}};
+}
