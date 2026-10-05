@@ -10,13 +10,8 @@
 
 constexpr int snapDistance = 6;
 
-QString CityLayoutElements::projectTitle() const
-{
-    return _ProjectTitle;
-}
 
-
-void CityLayoutElements::startProject(const QString &title)
+void CityLayoutElements::initializeCityElements(const QString &title)
 {
     while (!isEmpty()) {
         delete takeLast();
@@ -24,9 +19,7 @@ void CityLayoutElements::startProject(const QString &title)
 
     _SelectedElement = nullptr;
     _DraggedElement = nullptr;
-    _ProjectTitle = title;
 }
-
 
 
 CityLayoutElement* CityLayoutElements::elementAt( const QPoint &position ) const
@@ -193,7 +186,7 @@ bool CityLayoutElements::dragElementOnMouseMove( CityLayoutView* view, QMouseEve
                  y, closestVerticalSnap, snappedY);
     }
 
-    draggedElement->move(snappedX, snappedY);
+    draggedElement->move(view->snappedPosition(QPoint(snappedX, snappedY)));
 
     event->accept();
     return true;
@@ -218,6 +211,7 @@ bool CityLayoutElements::elementDragged( QWidget *view, bool mouseDragged )
 
     return true;
 }
+
 
 void CityLayoutElements::zoomAllElements( const QPointF anchor, const qreal relativeScale, qreal newZoom )
 {
@@ -248,3 +242,4 @@ void CityLayoutElements::deleteImage(CityLayoutElement *image)
 
     delete image;
 }
+

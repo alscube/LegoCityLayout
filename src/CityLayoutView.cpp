@@ -1,8 +1,10 @@
+
 #include <QBuffer>
 #include <QJsonArray>
 
 #include "CityLayoutView.h"
 #include "CityLayoutElement.h"
+#include "LoadedProjects.h"
 
 #include <QApplication>
 #include <QColor>
@@ -36,9 +38,9 @@ constexpr qreal gridSpacing = pixelsPerInch * gridSizeInches * gridVisualScale;
 }
 
 
-CityLayoutView::CityLayoutView(TableDefinition &tableDefinition, QWidget *parent)
+CityLayoutView::CityLayoutView(QWidget *parent)
     : QWidget(parent)
-    , m_tableDefinition(tableDefinition)
+    , _Projects(LoadedProjects::instance())
 {
     setMinimumWidth(150);
     setAcceptDrops(true);
@@ -60,24 +62,19 @@ CityLayoutView::CityLayoutView(TableDefinition &tableDefinition, QWidget *parent
 }
 
 
-void CityLayoutView::startProject(const QString &title)
+void CityLayoutView::activateProject()
 {
-    _LayoutElements.startProject(title);
-    m_changeRevision = 0;
-    m_gridOrigin = QPointF();
-    m_zoomFactor = 1.0;
+    m_mouseDragged = false;
+    m_isPanning = false;
+    unsetCursor();
+    if (_Projects.currentProject()) _Projects.cityLayouts().setDraggedElement(nullptr);
     update();
-}
-
-
-QString CityLayoutView::projectTitle() const
-{
-    return _LayoutElements.projectTitle();
 }
 
 
 void CityLayoutView::dragEnterEvent(QDragEnterEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     if (event->mimeData()->hasFormat(layoutElementMimeType)) {
         event->acceptProposedAction();
     }
@@ -86,6 +83,7 @@ void CityLayoutView::dragEnterEvent(QDragEnterEvent *event)
 
 void CityLayoutView::dropEvent(QDropEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     const QString resourcePath = QString::fromUtf8(
         event->mimeData()->data(layoutElementMimeType));
     const QString name = QString::fromUtf8(
@@ -96,15 +94,15 @@ void CityLayoutView::dropEvent(QDropEvent *event)
         return;
     }
 
-    auto *layoutElement = new CityLayoutElement(name, pixmap, m_zoomFactor, this);
+    auto *layoutElement = new CityLayoutElement(name, pixmap, _Projects.currentProject()->zoomFactor, this);
 
     const QPoint requestedPosition = event->position().toPoint()
                                      - QPoint(layoutElement->width() / 2,
                                               layoutElement->height() / 2);
-    layoutElement->move(requestedPosition);
+    layoutElement->move(snappedPosition(requestedPosition));
     layoutElement->show();
-    _LayoutElements.append(layoutElement);
-    ++m_changeRevision;
+    _Projects.cityLayouts().append(layoutElement);
+    ++_Projects.currentProject()->changeRevision;
 
     event->acceptProposedAction();
 }
@@ -112,6 +110,7 @@ void CityLayoutView::dropEvent(QDropEvent *event)
 
 void CityLayoutView::mousePressEvent(QMouseEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     if (event->button() == Qt::MiddleButton) {
         m_isPanning = true;
         m_lastPanPosition = event->position().toPoint();
@@ -126,7 +125,7 @@ void CityLayoutView::mousePressEvent(QMouseEvent *event)
         m_mousePressPosition = position;
         m_mouseDragged = false;
 
-        if ( !_LayoutElements.wasElementClicked(this,position) )
+        if ( !_Projects.cityLayouts().wasElementClicked(this,position) )
         {
             m_isPanning = true;
             m_lastPanPosition = position;
@@ -143,6 +142,7 @@ void CityLayoutView::mousePressEvent(QMouseEvent *event)
 
 void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     if (m_isPanning && event->buttons().testFlag(Qt::MiddleButton)) {
         const QPoint position = event->position().toPoint();
         panBy(position - m_lastPanPosition);
@@ -155,7 +155,7 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
 
     if ( button & Qt::LeftButton )
     {
-        if ( _LayoutElements.dragElementOnMouseMove(this, event) )
+        if ( _Projects.cityLayouts().dragElementOnMouseMove(this, event) )
         {
             return;
         }
@@ -171,7 +171,7 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
                 }
 
                 m_mouseDragged = true;
-                _LayoutElements.setSelectedElement(nullptr);
+                _Projects.cityLayouts().setSelectedElement(nullptr);
             }
 
             const QPoint offset = position - m_lastPanPosition;
@@ -185,7 +185,7 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
     }
 
     const QPoint position{ event->position().toPoint() };
-    _LayoutElements.setSelectedElementAt(position);
+    _Projects.cityLayouts().setSelectedElementAt(position);
 
     QWidget::mouseMoveEvent(event);
 }
@@ -193,6 +193,7 @@ void CityLayoutView::mouseMoveEvent(QMouseEvent *event)
 
 void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     if (event->button() == Qt::MiddleButton && m_isPanning) {
         m_isPanning = false;
         unsetCursor();
@@ -203,9 +204,9 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
     Qt::MouseButtons button( event->button() );
     if (button == Qt::LeftButton )
     {
-        if ( _LayoutElements.elementDragged( this, m_mouseDragged) )
+        if ( _Projects.cityLayouts().elementDragged( this, m_mouseDragged) )
         {
-            ++m_changeRevision;
+            ++_Projects.currentProject()->changeRevision;
             m_mouseDragged = false;
             unsetCursor();
             event->accept();
@@ -214,7 +215,7 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
 
         if ( m_isPanning) {
             if (!m_mouseDragged) {
-                _LayoutElements.setSelectedElement(nullptr);
+                _Projects.cityLayouts().setSelectedElement(nullptr);
             }
 
             m_isPanning = false;
@@ -231,27 +232,28 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
 
 void CityLayoutView::wheelEvent(QWheelEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     const int wheelDelta = event->angleDelta().y();
     if (wheelDelta == 0) {
         QWidget::wheelEvent(event);
         return;
     }
 
-    const qreal requestedZoom = m_zoomFactor * std::pow(1.0015, wheelDelta);
+    const qreal requestedZoom = _Projects.currentProject()->zoomFactor * std::pow(1.0015, wheelDelta);
     const qreal newZoom = qBound(minimumZoom, requestedZoom, maximumZoom);
-    if (qFuzzyCompare(newZoom, m_zoomFactor)) {
+    if (qFuzzyCompare(newZoom, _Projects.currentProject()->zoomFactor)) {
         event->accept();
         return;
     }
 
-    const qreal relativeScale = newZoom / m_zoomFactor;
+    const qreal relativeScale = newZoom / _Projects.currentProject()->zoomFactor;
     const QPointF anchor = event->position();
 
-    _LayoutElements.zoomAllElements( anchor, relativeScale, newZoom );
-    m_tableDefinition.scale(anchor, relativeScale);
-    m_gridOrigin = anchor + (m_gridOrigin - anchor) * relativeScale;
+    _Projects.cityLayouts().zoomAllElements( anchor, relativeScale, newZoom );
+    _Projects.tableDefinition().scale(anchor, relativeScale);
+    _Projects.currentProject()->gridOrigin = anchor + (_Projects.currentProject()->gridOrigin - anchor) * relativeScale;
 
-    m_zoomFactor = newZoom;
+    _Projects.currentProject()->zoomFactor = newZoom;
     update();
     event->accept();
 }
@@ -259,22 +261,23 @@ void CityLayoutView::wheelEvent(QWheelEvent *event)
 
 void CityLayoutView::panBy(const QPoint &offset)
 {
-    for (CityLayoutElement *image : _LayoutElements) {
+    for (CityLayoutElement *image : _Projects.cityLayouts()) {
         image->move(image->pos() + offset);
     }
-    m_tableDefinition.translate(offset);
-    m_gridOrigin += offset;
+    _Projects.tableDefinition().translate(offset);
+    _Projects.currentProject()->gridOrigin += offset;
     update();
 }
 
 
 void CityLayoutView::keyPressEvent(QKeyEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     if (event->key() == Qt::Key_Delete )
     {
-        if ( _LayoutElements.deleteSelectedElement() )
+        if ( _Projects.cityLayouts().deleteSelectedElement() )
         {
-            ++m_changeRevision;
+            ++_Projects.currentProject()->changeRevision;
             event->accept();
             return;
         }
@@ -288,13 +291,14 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
 {
     QWidget::paintEvent(event);
 
+    if (!_Projects.currentProject()) return;
     QPainter painter(this);
-    if (!projectTitle().isEmpty()) {
+    if (_Projects.tableEditor().gridVisible && !LoadedProjects::instance().title().isEmpty()) {
         painter.setRenderHint(QPainter::Antialiasing, false);
         painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
-        const qreal scaledGridSpacing = gridSpacing * m_zoomFactor;
-        qreal firstX = std::fmod(m_gridOrigin.x(), scaledGridSpacing);
-        qreal firstY = std::fmod(m_gridOrigin.y(), scaledGridSpacing);
+        const qreal scaledGridSpacing = gridSpacing * _Projects.currentProject()->zoomFactor;
+        qreal firstX = std::fmod(_Projects.currentProject()->gridOrigin.x(), scaledGridSpacing);
+        qreal firstY = std::fmod(_Projects.currentProject()->gridOrigin.y(), scaledGridSpacing);
         if (firstX < 0.0) firstX += scaledGridSpacing;
         if (firstY < 0.0) firstY += scaledGridSpacing;
         for (qreal x = firstX; x <= width(); x += scaledGridSpacing) {
@@ -306,15 +310,15 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
     }
 
     painter.setRenderHint(QPainter::Antialiasing);
-    if (!m_tableDefinition.isEmpty()) {
+    if (!_Projects.tableDefinition().isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));
         painter.setBrush(QColor(181, 143, 92, 120));
-        painter.drawPath(m_tableDefinition.usableArea());
+        painter.drawPath(_Projects.tableDefinition().usableArea());
     }
-    if (!m_tableDefinition.openSides().isEmpty()) {
+    if (!_Projects.tableDefinition().openSides().isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));
         painter.setBrush(Qt::NoBrush);
-        for (const QLineF &side : m_tableDefinition.openSides()) {
+        for (const QLineF &side : _Projects.tableDefinition().openSides()) {
             painter.drawLine(side);
         }
     }
@@ -323,39 +327,43 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
 
 void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
 {
-    CityLayoutElement* layoutElement{ _LayoutElements.elementAt(event->pos()) };
+    if (!_Projects.currentProject()) { event->ignore(); return; }
+    CityLayoutElement* layoutElement{ _Projects.cityLayouts().elementAt(event->pos()) };
     if (!layoutElement) {
         QWidget::contextMenuEvent(event);
         return;
     }
 
     setFocus(Qt::MouseFocusReason);
-    _LayoutElements.setSelectedElement(layoutElement);
+    _Projects.cityLayouts().setSelectedElement(layoutElement);
 
     QMenu menu(this);
     QAction *deleteAction = menu.addAction(tr("Delete"));
     if (menu.exec(event->globalPos()) == deleteAction) {
-        if (_LayoutElements.deleteSelectedElement()) {
-            ++m_changeRevision;
+        if (_Projects.cityLayouts().deleteSelectedElement()) {
+            ++_Projects.currentProject()->changeRevision;
         }
     }
     event->accept();
 }
+
 
 // void CityLayoutView::leaveEvent(QEvent *event)
 // {
 //     QWidget::leaveEvent(event);
 // }
 
+
 QPointF CityLayoutView::projectPoint(const QPointF &point) const
 {
-    return (point - m_gridOrigin) / m_zoomFactor;
+    return (point - _Projects.currentProject()->gridOrigin) / _Projects.currentProject()->zoomFactor;
 }
+
 
 QJsonObject CityLayoutView::savedLayout() const
 {
     QJsonArray elements;
-    for (const CityLayoutElement *element : _LayoutElements) {
+    for (const CityLayoutElement *element : _Projects.cityLayouts()) {
         QByteArray image;
         QBuffer buffer(&image);
         buffer.open(QIODevice::WriteOnly);
@@ -367,7 +375,24 @@ QJsonObject CityLayoutView::savedLayout() const
             {QStringLiteral("imagePngBase64"), QString::fromLatin1(image.toBase64())}});
     }
     return QJsonObject{{QStringLiteral("elements"), elements},
-                       {QStringLiteral("zoomFactor"), m_zoomFactor},
-                       {QStringLiteral("gridOriginX"), m_gridOrigin.x()},
-                       {QStringLiteral("gridOriginY"), m_gridOrigin.y()}};
+                       {QStringLiteral("zoomFactor"), _Projects.currentProject()->zoomFactor},
+                       {QStringLiteral("gridOriginX"), _Projects.currentProject()->gridOrigin.x()},
+                       {QStringLiteral("gridOriginY"), _Projects.currentProject()->gridOrigin.y()}};
+}
+
+
+quint64 CityLayoutView::changeRevision() const
+{
+    return _Projects.currentProject() ? _Projects.currentProject()->changeRevision : 0;
+}
+
+
+QPoint CityLayoutView::snappedPosition(const QPoint &position) const
+{
+    if (!_Projects.currentProject() || !_Projects.tableEditor().snapToGrid) return position;
+    const auto *project = _Projects.currentProject();
+    const qreal spacing = gridSpacing * project->zoomFactor;
+    const QPointF relative = position - project->gridOrigin;
+    return (project->gridOrigin + QPointF(qRound(relative.x() / spacing) * spacing,
+                                         qRound(relative.y() / spacing) * spacing)).toPoint();
 }

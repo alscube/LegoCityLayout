@@ -1,12 +1,10 @@
 #pragma once
 
-#include "CityLayoutElements.h"
-#include "TableDefinition.h"
-
 #include <QPoint>
 #include <QJsonObject>
 #include <QWidget>
 
+class LoadedProjects;
 class QDragEnterEvent;
 class QDropEvent;
 class QContextMenuEvent;
@@ -22,14 +20,13 @@ class CityLayoutView final : public QWidget
     Q_OBJECT
 
 public:
-    explicit CityLayoutView(TableDefinition &tableDefinition,
-                            QWidget *parent = nullptr);
+    explicit CityLayoutView(QWidget *parent = nullptr);
 
-    void startProject(const QString &title);
-    QString projectTitle() const;
+    void activateProject();
+    QPoint snappedPosition(const QPoint &position) const;
     QPointF projectPoint(const QPointF &point) const;
     QJsonObject savedLayout() const;
-    quint64 changeRevision() const { return m_changeRevision; }
+    quint64 changeRevision() const;
 
     bool mouseDragged() const { return m_mouseDragged; }
     void setMouseDragged(bool dragged) { m_mouseDragged = dragged; }
@@ -55,14 +52,10 @@ protected:
 private:
     void panBy(const QPoint &offset);
 
-    CityLayoutElements _LayoutElements;
-    TableDefinition &m_tableDefinition;
+    LoadedProjects &_Projects;
     QPoint m_dragOffset;
     QPoint m_mousePressPosition;
     QPoint m_lastPanPosition;
-    QPointF m_gridOrigin;
     bool m_mouseDragged = false;
     bool m_isPanning = false;
-    quint64 m_changeRevision = 0;
-    qreal m_zoomFactor = 1.0;
 };

@@ -1,47 +1,55 @@
 #pragma once
 
-#include "TableDefinition.h"
+#include <QWidget>
 
-#include <QStackedWidget>
+class QStackedWidget;
+class QToolBar;
+class QAction;
 
+class LoadedProjects;
 class CityLayoutView;
 class OpenOrCreateProjectView;
 class TableDefinitionEditorView;
 
-// this class manages the main project view,
-// which includes the open/create project view,
-// the table definition editor, and the city layout view
-
-
-class ProjectView final : public QStackedWidget
+class ProjectView final : public QWidget
 {
     Q_OBJECT
-
 public:
     explicit ProjectView(QWidget *parent = nullptr);
+    ~ProjectView() override;
 
     void promptToCreateProject();
+
     void startProject(const QString &title);
-    QString projectTitle() const;
+
     void defineTableOutline();
     void showCityLayout();
     bool saveTableDefinition();
+
     void closeProject();
 
+    bool setCurrentProjectIndex(int index);
+
 signals:
-//    void projectStarted(const QString &title);
     void openLayoutRequested();
     void openLastLayoutRequested();
 
 private:
-    QByteArray tableState() const;
-    QByteArray m_savedTableState;
-    quint64 m_savedLayoutRevision = 0;
-
+    void refreshToolbar();
+    void setCurrentWidget(QWidget *widget);
+    QWidget *currentWidget() const;
+    QByteArray tableState();
     void initializeNewProject(const QString &title);
 
-    TableDefinition m_tableDefinition;
-    OpenOrCreateProjectView *m_openOrCreateProjectView = nullptr;
+    QStackedWidget *m_views = nullptr;
+    QToolBar *m_toolbar = nullptr;
+    QAction *m_tableViewAction = nullptr;
+    QAction *m_cityViewAction = nullptr;
+    QAction *m_unitsAction = nullptr;
+    QAction *m_gridAction = nullptr;
+    QAction *m_snapAction = nullptr;
+    LoadedProjects &_Projects;
     CityLayoutView *m_cityLayoutView = nullptr;
     TableDefinitionEditorView *m_tableDefinitionEditor = nullptr;
+    OpenOrCreateProjectView *m_openOrCreateProjectView = nullptr;
 };

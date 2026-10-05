@@ -17,8 +17,7 @@ class CityLayoutElements final : public QList<CityLayoutElement *>
 public:
     using QList<CityLayoutElement *>::QList;
 
-    QString projectTitle() const;
-    void startProject(const QString &title);
+    void initializeCityElements(const QString &title);
 
     CityLayoutElement* elementAt(const QPoint &position) const;
 
@@ -44,7 +43,6 @@ public:
     void deleteImage(CityLayoutElement *image);
 
 private:
-    QString _ProjectTitle;
     CityLayoutElement *_SelectedElement = nullptr;
     CityLayoutElement *_DraggedElement = nullptr;
 };

@@ -1,5 +1,7 @@
+
 #include "mainwindow.h"
 
+#include "LoadedProjects.h"
 #include "LayoutElementsView.h"
 #include "ProjectView.h"
 #include "SettingsDialog.h"
@@ -14,11 +16,16 @@
 #include <QSplitter>
 #include <QStatusBar>
 
+
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
+    , _Projects(LoadedProjects::instance())
     , _splitter(new QSplitter(Qt::Horizontal, this))
     , _projectView(new ProjectView(_splitter))
 {
+
+    // note: ProjectView is needed to setup the Main Menu
     SetupMainMenu( );
 
     CreateSplitterView( );
@@ -63,12 +70,31 @@ void MainWindow::SetupMainMenu( )
 
     QMenu *tableMenu = menuBar()->addMenu(tr("&View"));
 
-    QAction *defineTableAction = tableMenu->addAction(tr("Edit Table Outline..."));
+    QAction *defineTableAction = tableMenu->addAction(tr("Edit &Table Outline..."));
     connect(defineTableAction, &QAction::triggered,
             this, &MainWindow::defineTableOutline);
 
-    QAction *showLayoutAction = tableMenu->addAction(tr("Show City Layout"));
+    QAction *showLayoutAction = tableMenu->addAction(tr("Edit City &Layout"));
     connect(showLayoutAction, &QAction::triggered, this, &MainWindow::showCityLayout);
+
+    QMenu *projectsMenu = menuBar()->addMenu(tr("&Projects"));
+    connect(projectsMenu, &QMenu::aboutToShow, this, [this, projectsMenu]
+    {
+        projectsMenu->clear();
+        int projectCount = _Projects.projectCount();
+        for (int index = 0; index < projectCount; ++index)
+        {
+            auto *action = projectsMenu->addAction(_Projects.project(index)->title());
+            action->setCheckable(true);
+            action->setChecked(index == _Projects.currentProjectIndex());
+            connect(action, &QAction::triggered, this, [this, index] {
+                _projectView->setCurrentProjectIndex(index);
+            });
+        }
+        if (_Projects.projectCount() == 0) {
+            projectsMenu->addAction(tr("No Loaded Projects"))->setEnabled(false);
+        }
+    });
 
     QMenu *settingsMenu = menuBar()->addMenu(tr("&Settings"));
     QAction *settingsAction = settingsMenu->addAction(tr("Settings..."));
@@ -116,8 +142,8 @@ void MainWindow::CreateSplitterView( )
 
 void MainWindow::defineTableOutline()
 {
-    if (_projectView->projectTitle().isEmpty()) {
-        statusBar()->showMessage(tr("Please load or create a new layout before defining its table"));
+    if (_Projects.title().isEmpty()) {
+        statusBar()->showMessage(tr("Please load or create a new project before defining its layout"));
         return;
     }
 

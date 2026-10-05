@@ -1,7 +1,10 @@
+
+#include <QSignalBlocker>
 #include "TableDefinitionEditorView.h"
 
 #include "TableDefinition.h"
 #include "TableSurface.h"
+#include "LoadedProjects.h"
 #include "UserSettings.h"
 
 #include <QDialog>
@@ -250,10 +253,9 @@ bool getSideMeasurements(QWidget *parent, qreal suggestedLength,
 }
 }
 
-TableDefinitionEditorView::TableDefinitionEditorView(TableDefinition &definition,
-                                             QWidget *parent)
+TableDefinitionEditorView::TableDefinitionEditorView(QWidget *parent)
     : QWidget(parent)
-    , m_definition(definition)
+    , _Projects(LoadedProjects::instance())
 {
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
@@ -277,36 +279,6 @@ TableDefinitionEditorView::TableDefinitionEditorView(TableDefinition &definition
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
 
-    m_unitsLabel = new QLabel(header);
-    refreshMeasurementUnits();
-    headerLayout->addWidget(m_unitsLabel);
-
-    auto *gridButton = new QPushButton(tr("Hide Grid"), header);
-    gridButton->setCheckable(true);
-    gridButton->setChecked(true);
-    gridButton->setToolTip(tr("Show or hide the measurement grid"));
-    headerLayout->addWidget(gridButton);
-
-    auto *snapButton = new QPushButton(tr("Snap to Grid"), header);
-    snapButton->setCheckable(true);
-    snapButton->setChecked(true);
-    snapButton->setToolTip(tr("Snap drawn endpoints to grid intersections"));
-    headerLayout->addWidget(snapButton);
-
-    connect(gridButton, &QPushButton::toggled,
-            this, [this, gridButton](bool checked) {
-        m_gridVisible = checked;
-        gridButton->setText(checked ? tr("Hide Grid") : tr("Show Grid"));
-        update();
-    });
-    connect(snapButton, &QPushButton::toggled, this, [this](bool checked) {
-        m_snapToGrid = checked;
-        if (m_drawingSide) {
-            m_cursor = snappedPoint(m_cursor);
-        }
-        update();
-    });
-
     layout->addWidget(header);
     layout->addStretch();
 
@@ -321,17 +293,24 @@ TableDefinitionEditorView::TableDefinitionEditorView(TableDefinition &definition
     layout->addWidget(instructions);
 }
 
+void TableDefinitionEditorView::activateProject()
+{
+    if (!_Projects.currentProject()) return;
+    unsetCursor();
+    update();
+}
+
 void TableDefinitionEditorView::begin()
 {
-    m_draft.clear();
-    m_editSides = m_definition.openSides();
-    m_draftSurfaceName.clear();
-    m_selectedSurface = -1;
-    m_selectedSide = -1;
-    m_active = m_definition.isEmpty() || !m_editSides.isEmpty();
-    m_drawingSide = false;
-    m_editingIndividualSides = !m_editSides.isEmpty();
-    if (m_active) {
+    _Projects.tableEditor().draft.clear();
+    _Projects.tableEditor().editSides = _Projects.tableDefinition().openSides();
+    _Projects.tableEditor().draftSurfaceName.clear();
+    _Projects.tableEditor().selectedSurface = -1;
+    _Projects.tableEditor().selectedSide = -1;
+    _Projects.tableEditor().active = _Projects.tableDefinition().isEmpty() || !_Projects.tableEditor().editSides.isEmpty();
+    _Projects.tableEditor().drawingSide = false;
+    _Projects.tableEditor().editingIndividualSides = !_Projects.tableEditor().editSides.isEmpty();
+    if (_Projects.tableEditor().active) {
         setCursor(Qt::CrossCursor);
     } else {
         unsetCursor();
@@ -342,55 +321,55 @@ void TableDefinitionEditorView::begin()
 
 void TableDefinitionEditorView::reset()
 {
-    m_draft.clear();
-    m_editSides.clear();
-    m_draftSurfaceName.clear();
-    m_active = false;
-    m_drawingSide = false;
-    m_editingIndividualSides = false;
-    m_selectedSurface = -1;
-    m_selectedSide = -1;
+    _Projects.tableEditor().draft.clear();
+    _Projects.tableEditor().editSides.clear();
+    _Projects.tableEditor().draftSurfaceName.clear();
+    _Projects.tableEditor().active = false;
+    _Projects.tableEditor().drawingSide = false;
+    _Projects.tableEditor().editingIndividualSides = false;
+    _Projects.tableEditor().selectedSurface = -1;
+    _Projects.tableEditor().selectedSide = -1;
     unsetCursor();
     update();
 }
 
 void TableDefinitionEditorView::resetViewScale()
 {
-    m_viewScale = 1.0;
+    _Projects.tableEditor().viewScale = 1.0;
 }
 
 void TableDefinitionEditorView::refreshMeasurementUnits()
 {
-    const QString units = usesMetricMeasurements()
-                              ? tr("Centimeters")
-                              : tr("Inches");
-    m_unitsLabel->setText(tr("Units: %1").arg(units));
+    if (_Projects.currentProject() && _Projects.tableEditor().drawingSide)
+        _Projects.tableEditor().cursor = snappedPoint(_Projects.tableEditor().cursor);
+    emit measurementUnitsChanged();
     update();
 }
 
 QPointF TableDefinitionEditorView::snappedPoint(const QPointF &point) const
 {
-    if (!m_snapToGrid) {
+    if (!_Projects.tableEditor().snapToGrid) {
         return point;
     }
 
-    const qreal spacing = gridSpacing * m_viewScale;
+    const qreal spacing = gridSpacing * _Projects.tableEditor().viewScale;
     return QPointF(qRound(point.x() / spacing) * spacing,
                    qRound(point.y() / spacing) * spacing);
 }
 
 void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     if (event->button() != Qt::LeftButton) {
         QWidget::mousePressEvent(event);
         return;
     }
 
-    if (!m_active) {
-        m_selectedSurface = -1;
-        m_selectedSide = -1;
+    if (!_Projects.tableEditor().active) {
+        _Projects.tableEditor().selectedSurface = -1;
+        _Projects.tableEditor().selectedSide = -1;
         qreal closestDistance = sideSelectionDistance;
-        const auto &surfaces = m_definition.surfaces();
+        const auto &surfaces = _Projects.tableDefinition().surfaces();
         for (qsizetype surfaceIndex = 0; surfaceIndex < surfaces.size(); ++surfaceIndex) {
             const QPolygonF outline = surfaces.at(surfaceIndex).outline();
             for (qsizetype sideIndex = 0; sideIndex < outline.size(); ++sideIndex) {
@@ -399,14 +378,14 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
                 const qreal distance = distanceToSegment(event->position(), side);
                 if (distance <= closestDistance) {
                     closestDistance = distance;
-                    m_selectedSurface = surfaceIndex;
-                    m_selectedSide = sideIndex;
+                    _Projects.tableEditor().selectedSurface = surfaceIndex;
+                    _Projects.tableEditor().selectedSide = sideIndex;
                 }
             }
         }
 
         update();
-        if (m_selectedSide >= 0) {
+        if (_Projects.tableEditor().selectedSide >= 0) {
             setFocus(Qt::MouseFocusReason);
             event->accept();
             return;
@@ -415,11 +394,11 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (m_editingIndividualSides) {
+    if (_Projects.tableEditor().editingIndividualSides) {
         qreal closestEndpointDistance = endpointSelectionDistance;
         bool endpointFound = false;
         QPointF closestEndpoint;
-        for (const QLineF &side : m_editSides) {
+        for (const QLineF &side : _Projects.tableEditor().editSides) {
             for (const QPointF &endpoint : {side.p1(), side.p2()}) {
                 const qreal distance =
                     QLineF(event->position(), endpoint).length();
@@ -432,56 +411,56 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
         }
 
         if (endpointFound) {
-            m_selectedSide = -1;
-            m_sideStart = closestEndpoint;
-            m_cursor = closestEndpoint;
-            m_drawingSide = true;
+            _Projects.tableEditor().selectedSide = -1;
+            _Projects.tableEditor().sideStart = closestEndpoint;
+            _Projects.tableEditor().cursor = closestEndpoint;
+            _Projects.tableEditor().drawingSide = true;
             setFocus(Qt::MouseFocusReason);
             update();
             event->accept();
             return;
         }
 
-        m_selectedSide = -1;
+        _Projects.tableEditor().selectedSide = -1;
         qreal closestDistance = sideSelectionDistance;
-        for (qsizetype index = 0; index < m_editSides.size(); ++index) {
+        for (qsizetype index = 0; index < _Projects.tableEditor().editSides.size(); ++index) {
             const qreal distance =
-                distanceToSegment(event->position(), m_editSides.at(index));
+                distanceToSegment(event->position(), _Projects.tableEditor().editSides.at(index));
             if (distance <= closestDistance) {
                 closestDistance = distance;
-                m_selectedSide = index;
+                _Projects.tableEditor().selectedSide = index;
             }
         }
 
-        if (m_selectedSide >= 0) {
+        if (_Projects.tableEditor().selectedSide >= 0) {
             setFocus(Qt::MouseFocusReason);
             update();
             event->accept();
             return;
         }
 
-        m_sideStart = snappedPoint(event->position());
-        m_cursor = m_sideStart;
-        m_drawingSide = true;
+        _Projects.tableEditor().sideStart = snappedPoint(event->position());
+        _Projects.tableEditor().cursor = _Projects.tableEditor().sideStart;
+        _Projects.tableEditor().drawingSide = true;
         update();
         event->accept();
         return;
     }
 
-    if (m_draft.isEmpty()) {
-        m_draft.append(snappedPoint(event->position()));
+    if (_Projects.tableEditor().draft.isEmpty()) {
+        _Projects.tableEditor().draft.append(snappedPoint(event->position()));
     } else {
         const qreal distanceToLast =
-            QLineF(event->position(), m_draft.last()).length();
+            QLineF(event->position(), _Projects.tableEditor().draft.last()).length();
         const qreal distanceToFirst =
-            QLineF(event->position(), m_draft.first()).length();
+            QLineF(event->position(), _Projects.tableEditor().draft.first()).length();
 
         if (distanceToLast > endpointSelectionDistance
             && distanceToFirst > endpointSelectionDistance) {
             qsizetype selectedDraftSide = -1;
             qreal closestDistance = sideSelectionDistance;
-            for (qsizetype index = 1; index < m_draft.size(); ++index) {
-                const QLineF side(m_draft.at(index - 1), m_draft.at(index));
+            for (qsizetype index = 1; index < _Projects.tableEditor().draft.size(); ++index) {
+                const QLineF side(_Projects.tableEditor().draft.at(index - 1), _Projects.tableEditor().draft.at(index));
                 const qreal distance =
                     distanceToSegment(event->position(), side);
                 if (distance <= closestDistance) {
@@ -491,14 +470,14 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
             }
 
             if (selectedDraftSide >= 0) {
-                m_editSides.clear();
-                for (qsizetype index = 1; index < m_draft.size(); ++index) {
-                    m_editSides.append(
-                        QLineF(m_draft.at(index - 1), m_draft.at(index)));
+                _Projects.tableEditor().editSides.clear();
+                for (qsizetype index = 1; index < _Projects.tableEditor().draft.size(); ++index) {
+                    _Projects.tableEditor().editSides.append(
+                        QLineF(_Projects.tableEditor().draft.at(index - 1), _Projects.tableEditor().draft.at(index)));
                 }
-                m_draft.clear();
-                m_editingIndividualSides = true;
-                m_selectedSide = selectedDraftSide;
+                _Projects.tableEditor().draft.clear();
+                _Projects.tableEditor().editingIndividualSides = true;
+                _Projects.tableEditor().selectedSide = selectedDraftSide;
                 syncOpenSides();
                 setFocus(Qt::MouseFocusReason);
                 update();
@@ -509,7 +488,7 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
 
         if (distanceToLast > endpointSelectionDistance) {
             if (distanceToFirst <= endpointSelectionDistance) {
-                std::reverse(m_draft.begin(), m_draft.end());
+                std::reverse(_Projects.tableEditor().draft.begin(), _Projects.tableEditor().draft.end());
             } else {
                 event->accept();
                 return;
@@ -517,37 +496,39 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
         }
     }
 
-    m_drawingSide = true;
-    m_cursor = snappedPoint(event->position());
+    _Projects.tableEditor().drawingSide = true;
+    _Projects.tableEditor().cursor = snappedPoint(event->position());
     update();
     event->accept();
 }
 
 void TableDefinitionEditorView::mouseMoveEvent(QMouseEvent *event)
 {
-    if (!m_active || !m_drawingSide) {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (!_Projects.tableEditor().active || !_Projects.tableEditor().drawingSide) {
         QWidget::mouseMoveEvent(event);
         return;
     }
 
-    m_cursor = snappedPoint(event->position());
+    _Projects.tableEditor().cursor = snappedPoint(event->position());
     update();
     event->accept();
 }
 
 void TableDefinitionEditorView::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (!m_active || !m_drawingSide || event->button() != Qt::LeftButton) {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (!_Projects.tableEditor().active || !_Projects.tableEditor().drawingSide || event->button() != Qt::LeftButton) {
         QWidget::mouseReleaseEvent(event);
         return;
     }
 
-    m_drawingSide = false;
+    _Projects.tableEditor().drawingSide = false;
     const QPointF releasedPoint = snappedPoint(event->position());
-    if (m_editingIndividualSides) {
+    if (_Projects.tableEditor().editingIndividualSides) {
         QPointF sideEnd = releasedPoint;
         qreal closestEndpointDistance = closePointDistance;
-        for (const QLineF &existingSide : m_editSides) {
+        for (const QLineF &existingSide : _Projects.tableEditor().editSides) {
             for (const QPointF &endpoint : {existingSide.p1(), existingSide.p2()}) {
                 const qreal distance = QLineF(sideEnd, endpoint).length();
                 if (distance <= closestEndpointDistance) {
@@ -557,14 +538,14 @@ void TableDefinitionEditorView::mouseReleaseEvent(QMouseEvent *event)
             }
         }
 
-        QLineF side(m_sideStart, sideEnd);
+        QLineF side(_Projects.tableEditor().sideStart, sideEnd);
         if (side.length() < 1.0) {
             update();
             event->accept();
             return;
         }
 
-        qreal inches = side.length() / (pixelsPerInch * m_viewScale);
+        qreal inches = side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale);
         qreal screenAngle = screenAngleForSide(side);
         if (!getSideMeasurements(this, inches, screenAngle,
                                  inches, screenAngle)) {
@@ -573,80 +554,81 @@ void TableDefinitionEditorView::mouseReleaseEvent(QMouseEvent *event)
             return;
         }
 
-        const qreal length = inches * pixelsPerInch * m_viewScale;
+        const qreal length = inches * pixelsPerInch * _Projects.tableEditor().viewScale;
         const qreal heading = qDegreesToRadians(screenAngle);
         const QPointF endPoint = snappedPoint(
-            m_sideStart + QPointF(length * std::cos(heading),
+            _Projects.tableEditor().sideStart + QPointF(length * std::cos(heading),
                                   length * std::sin(heading)));
-        m_editSides.append(QLineF(m_sideStart, endPoint));
-        mergeConnectedCollinearSides(m_editSides);
+        _Projects.tableEditor().editSides.append(QLineF(_Projects.tableEditor().sideStart, endPoint));
+        mergeConnectedCollinearSides(_Projects.tableEditor().editSides);
         syncOpenSides();
         finishSideEditingIfClosed();
         update();
         event->accept();
         return;
     }
-    if (m_draft.size() >= 3
-        && QLineF(releasedPoint, m_draft.first()).length() <= closePointDistance) {
-        removeCollinearOutlinePoints(m_draft);
-        const QString surfaceName = m_draftSurfaceName.isEmpty()
+    if (_Projects.tableEditor().draft.size() >= 3
+        && QLineF(releasedPoint, _Projects.tableEditor().draft.first()).length() <= closePointDistance) {
+        removeCollinearOutlinePoints(_Projects.tableEditor().draft);
+        const QString surfaceName = _Projects.tableEditor().draftSurfaceName.isEmpty()
                                         ? QObject::tr("Table surface")
-                                        : m_draftSurfaceName;
-        m_definition.addSurface(TableSurface(surfaceName, m_draft));
-        m_definition.setOpenSides({});
+                                        : _Projects.tableEditor().draftSurfaceName;
+        _Projects.tableDefinition().addSurface(TableSurface(surfaceName, _Projects.tableEditor().draft));
+        _Projects.tableDefinition().setOpenSides({});
         reset();
         event->accept();
         emit editingFinished();
         return;
     }
 
-    QLineF side(m_draft.last(), releasedPoint);
+    QLineF side(_Projects.tableEditor().draft.last(), releasedPoint);
     if (side.length() < 1.0) {
-        if (m_draft.size() == 1) {
-            m_draft.clear();
+        if (_Projects.tableEditor().draft.size() == 1) {
+            _Projects.tableEditor().draft.clear();
         } else {
-            m_cursor = m_draft.last();
+            _Projects.tableEditor().cursor = _Projects.tableEditor().draft.last();
         }
         update();
         event->accept();
         return;
     }
 
-    qreal inches = side.length() / (pixelsPerInch * m_viewScale);
+    qreal inches = side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale);
     qreal screenAngle = screenAngleForSide(side);
     if (!getSideMeasurements(this, inches, screenAngle,
                              inches, screenAngle)) {
-        if (m_draft.size() == 1) {
-            m_draft.clear();
+        if (_Projects.tableEditor().draft.size() == 1) {
+            _Projects.tableEditor().draft.clear();
         } else {
-            m_cursor = m_draft.last();
+            _Projects.tableEditor().cursor = _Projects.tableEditor().draft.last();
         }
         update();
         event->accept();
         return;
     }
 
-    const qreal length = inches * pixelsPerInch * m_viewScale;
+    const qreal length = inches * pixelsPerInch * _Projects.tableEditor().viewScale;
     const qreal heading = qDegreesToRadians(screenAngle);
     const QPointF newPoint = snappedPoint(
-        m_draft.last() + QPointF(length * std::cos(heading),
+        _Projects.tableEditor().draft.last() + QPointF(length * std::cos(heading),
                                  length * std::sin(heading)));
-    m_draft.append(newPoint);
-    removeCollinearOutlinePoints(m_draft);
+    _Projects.tableEditor().draft.append(newPoint);
+    removeCollinearOutlinePoints(_Projects.tableEditor().draft);
     syncOpenSides();
-    m_cursor = newPoint;
+    _Projects.tableEditor().cursor = newPoint;
     update();
     event->accept();
 }
 
 void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
 {
+    if (!_Projects.currentProject()) { event->ignore(); return; }
     int keyPressed = event->key();
 
-    if (!m_active) {
+    if (!_Projects.tableEditor().active) {
         if ((keyPressed == Qt::Key_Delete || keyPressed == Qt::Key_Backspace)
-            && m_selectedSurface >= 0
-            && m_selectedSide >= 0) {
+            && _Projects.tableEditor().selectedSurface >= 0
+            && _Projects.tableEditor().selectedSide >= 0) {
             deleteSelectedSide();
             event->accept();
             return;
@@ -655,9 +637,9 @@ void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    if (m_editingIndividualSides
+    if (_Projects.tableEditor().editingIndividualSides
         && (keyPressed == Qt::Key_Delete || keyPressed == Qt::Key_Backspace)
-        && m_selectedSide >= 0) {
+        && _Projects.tableEditor().selectedSide >= 0) {
         deleteSelectedSide();
         event->accept();
         return;
@@ -671,12 +653,12 @@ void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    if (keyPressed == Qt::Key_Backspace && !m_draft.isEmpty()) {
-        m_draft.removeLast();
-        if (m_draft.size() == 1) {
-            m_draft.clear();
-        } else if (!m_draft.isEmpty()) {
-            m_cursor = m_draft.last();
+    if (keyPressed == Qt::Key_Backspace && !_Projects.tableEditor().draft.isEmpty()) {
+        _Projects.tableEditor().draft.removeLast();
+        if (_Projects.tableEditor().draft.size() == 1) {
+            _Projects.tableEditor().draft.clear();
+        } else if (!_Projects.tableEditor().draft.isEmpty()) {
+            _Projects.tableEditor().cursor = _Projects.tableEditor().draft.last();
         }
         syncOpenSides();
         update();
@@ -685,12 +667,12 @@ void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
     }
 
     if (keyPressed == Qt::Key_Delete) {
-        if (m_draft.size() > 1) {
-            m_draft.removeLast();
-            if (m_draft.size() == 1) {
-                m_draft.clear();
+        if (_Projects.tableEditor().draft.size() > 1) {
+            _Projects.tableEditor().draft.removeLast();
+            if (_Projects.tableEditor().draft.size() == 1) {
+                _Projects.tableEditor().draft.clear();
             } else {
-                m_cursor = m_draft.last();
+                _Projects.tableEditor().cursor = _Projects.tableEditor().draft.last();
             }
             syncOpenSides();
             update();
@@ -704,40 +686,40 @@ void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
 
 void TableDefinitionEditorView::deleteSelectedSide()
 {
-    if (m_editingIndividualSides) {
-        if (m_selectedSide >= 0 && m_selectedSide < m_editSides.size()) {
-            m_editSides.removeAt(m_selectedSide);
+    if (_Projects.tableEditor().editingIndividualSides) {
+        if (_Projects.tableEditor().selectedSide >= 0 && _Projects.tableEditor().selectedSide < _Projects.tableEditor().editSides.size()) {
+            _Projects.tableEditor().editSides.removeAt(_Projects.tableEditor().selectedSide);
             syncOpenSides();
-            m_selectedSide = -1;
+            _Projects.tableEditor().selectedSide = -1;
             update();
         }
         return;
     }
 
-    if (m_active || m_selectedSurface < 0 || m_selectedSide < 0) {
+    if (_Projects.tableEditor().active || _Projects.tableEditor().selectedSurface < 0 || _Projects.tableEditor().selectedSide < 0) {
         return;
     }
 
     const TableSurface &surface =
-        m_definition.surfaces().at(m_selectedSurface);
+        _Projects.tableDefinition().surfaces().at(_Projects.tableEditor().selectedSurface);
     const QPolygonF outline = surface.outline();
-    m_draftSurfaceName = surface.name();
-    m_editSides.clear();
+    _Projects.tableEditor().draftSurfaceName = surface.name();
+    _Projects.tableEditor().editSides.clear();
     for (qsizetype index = 0; index < outline.size(); ++index) {
-        if (index != m_selectedSide) {
-            m_editSides.append(
+        if (index != _Projects.tableEditor().selectedSide) {
+            _Projects.tableEditor().editSides.append(
                 QLineF(outline.at(index),
                        outline.at((index + 1) % outline.size())));
         }
     }
-    mergeConnectedCollinearSides(m_editSides);
+    mergeConnectedCollinearSides(_Projects.tableEditor().editSides);
 
-    m_definition.removeSurface(m_selectedSurface);
-    m_active = true;
-    m_editingIndividualSides = true;
+    _Projects.tableDefinition().removeSurface(_Projects.tableEditor().selectedSurface);
+    _Projects.tableEditor().active = true;
+    _Projects.tableEditor().editingIndividualSides = true;
     syncOpenSides();
-    m_selectedSurface = -1;
-    m_selectedSide = -1;
+    _Projects.tableEditor().selectedSurface = -1;
+    _Projects.tableEditor().selectedSide = -1;
     setCursor(Qt::CrossCursor);
     setFocus(Qt::OtherFocusReason);
     update();
@@ -745,26 +727,26 @@ void TableDefinitionEditorView::deleteSelectedSide()
 
 void TableDefinitionEditorView::finishSideEditingIfClosed()
 {
-    if (m_editSides.size() < 3) {
+    if (_Projects.tableEditor().editSides.size() < 3) {
         return;
     }
 
-    QList<bool> used(m_editSides.size(), false);
+    QList<bool> used(_Projects.tableEditor().editSides.size(), false);
     QPolygonF outline;
-    outline.append(m_editSides.first().p1());
-    QPointF current = m_editSides.first().p2();
+    outline.append(_Projects.tableEditor().editSides.first().p1());
+    QPointF current = _Projects.tableEditor().editSides.first().p2();
     outline.append(current);
     used[0] = true;
 
-    for (qsizetype count = 1; count < m_editSides.size(); ++count) {
+    for (qsizetype count = 1; count < _Projects.tableEditor().editSides.size(); ++count) {
         qsizetype nextIndex = -1;
         QPointF nextPoint;
-        for (qsizetype index = 0; index < m_editSides.size(); ++index) {
+        for (qsizetype index = 0; index < _Projects.tableEditor().editSides.size(); ++index) {
             if (used.at(index)) {
                 continue;
             }
 
-            const QLineF &candidate = m_editSides.at(index);
+            const QLineF &candidate = _Projects.tableEditor().editSides.at(index);
             if (QLineF(current, candidate.p1()).length() < 1.0) {
                 nextIndex = index;
                 nextPoint = candidate.p2();
@@ -790,41 +772,42 @@ void TableDefinitionEditorView::finishSideEditingIfClosed()
     }
     outline.removeLast();
 
-    const QString surfaceName = m_draftSurfaceName.isEmpty()
+    const QString surfaceName = _Projects.tableEditor().draftSurfaceName.isEmpty()
                                     ? tr("Table surface")
-                                    : m_draftSurfaceName;
-    if (!m_definition.addSurface(TableSurface(surfaceName, outline))) {
+                                    : _Projects.tableEditor().draftSurfaceName;
+    if (!_Projects.tableDefinition().addSurface(TableSurface(surfaceName, outline))) {
         return;
     }
 
-    m_definition.setOpenSides({});
+    _Projects.tableDefinition().setOpenSides({});
     reset();
     emit editingFinished();
 }
 
 void TableDefinitionEditorView::syncOpenSides()
 {
-    if (m_editingIndividualSides) {
-        m_definition.setOpenSides(m_editSides);
+    if (_Projects.tableEditor().editingIndividualSides) {
+        _Projects.tableDefinition().setOpenSides(_Projects.tableEditor().editSides);
         return;
     }
 
     QList<QLineF> sides;
-    for (qsizetype index = 1; index < m_draft.size(); ++index) {
-        sides.append(QLineF(m_draft.at(index - 1), m_draft.at(index)));
+    for (qsizetype index = 1; index < _Projects.tableEditor().draft.size(); ++index) {
+        sides.append(QLineF(_Projects.tableEditor().draft.at(index - 1), _Projects.tableEditor().draft.at(index)));
     }
-    m_definition.setOpenSides(sides);
+    _Projects.tableDefinition().setOpenSides(sides);
 }
 
 void TableDefinitionEditorView::paintEvent(QPaintEvent *event)
 {
+    if (!_Projects.currentProject()) return;
     QWidget::paintEvent(event);
     QPainter painter(this);
 
-    if (m_gridVisible) {
+    if (_Projects.tableEditor().gridVisible) {
         painter.setRenderHint(QPainter::Antialiasing, false);
         painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
-        const qreal scaledGridSpacing = gridSpacing * m_viewScale;
+        const qreal scaledGridSpacing = gridSpacing * _Projects.tableEditor().viewScale;
         for (qreal x = 0.0; x <= width(); x += scaledGridSpacing) {
             painter.drawLine(QPointF(x, 0.0), QPointF(x, height()));
         }
@@ -843,13 +826,13 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
     const QColor editingMeasurementColor(75, 50, 25);
     const QColor editingPreviewColor(130, 90, 40);
 
-    if (!m_definition.isEmpty()) {
+    if (!_Projects.tableDefinition().isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));
         painter.setBrush(QColor(181, 143, 92, 120));
-        painter.drawPath(m_definition.usableArea());
+        painter.drawPath(_Projects.tableDefinition().usableArea());
 
         painter.setPen(editingMeasurementColor);
-        for (const TableSurface &surface : m_definition.surfaces()) {
+        for (const TableSurface &surface : _Projects.tableDefinition().surfaces()) {
             const QPolygonF outline = surface.outline();
             for (qsizetype index = 0; index < outline.size(); ++index) {
                 const QLineF side(outline.at(index),
@@ -857,30 +840,30 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
                 painter.drawText(
                     measurementTextPosition(side),
                     formattedLength(
-                        side.length() / (pixelsPerInch * m_viewScale)));
+                        side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale)));
             }
         }
 
 
-        if (m_selectedSurface >= 0 && m_selectedSide >= 0) {
+        if (_Projects.tableEditor().selectedSurface >= 0 && _Projects.tableEditor().selectedSide >= 0) {
             const QPolygonF outline =
-                m_definition.surfaces().at(m_selectedSurface).outline();
+                _Projects.tableDefinition().surfaces().at(_Projects.tableEditor().selectedSurface).outline();
             painter.setPen(QPen(QColor(255, 80, 70), 6));
             painter.setBrush(Qt::NoBrush);
-            painter.drawLine(outline.at(m_selectedSide),
-                             outline.at((m_selectedSide + 1) % outline.size()));
+            painter.drawLine(outline.at(_Projects.tableEditor().selectedSide),
+                             outline.at((_Projects.tableEditor().selectedSide + 1) % outline.size()));
         }
     }
 
-    if (!m_active) {
+    if (!_Projects.tableEditor().active) {
         return;
     }
 
-    if (m_editingIndividualSides) {
+    if (_Projects.tableEditor().editingIndividualSides) {
         painter.setBrush(editingLineColor);
-        for (qsizetype index = 0; index < m_editSides.size(); ++index) {
-            const QLineF &side = m_editSides.at(index);
-            painter.setPen(index == m_selectedSide
+        for (qsizetype index = 0; index < _Projects.tableEditor().editSides.size(); ++index) {
+            const QLineF &side = _Projects.tableEditor().editSides.at(index);
+            painter.setPen(index == _Projects.tableEditor().selectedSide
                                ? QPen(QColor(255, 80, 70), 6)
                                : QPen(editingLineColor, 2));
             painter.drawLine(side);
@@ -890,37 +873,37 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
             painter.drawText(
                 measurementTextPosition(side),
                 formattedLength(
-                    side.length() / (pixelsPerInch * m_viewScale)));
+                    side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale)));
         }
-        if (m_drawingSide) {
+        if (_Projects.tableEditor().drawingSide) {
             painter.setPen(QPen(editingPreviewColor, 1, Qt::DashLine));
-            painter.drawLine(m_sideStart, m_cursor);
+            painter.drawLine(_Projects.tableEditor().sideStart, _Projects.tableEditor().cursor);
         }
         return;
     }
 
     painter.setPen(QPen(editingLineColor, 2));
     painter.setBrush(editingLineColor);
-    if (m_draft.size() > 1) {
-        painter.drawPolyline(m_draft);
+    if (_Projects.tableEditor().draft.size() > 1) {
+        painter.drawPolyline(_Projects.tableEditor().draft);
         painter.setPen(editingMeasurementColor);
-        for (qsizetype index = 1; index < m_draft.size(); ++index) {
-            const QLineF side(m_draft.at(index - 1), m_draft.at(index));
+        for (qsizetype index = 1; index < _Projects.tableEditor().draft.size(); ++index) {
+            const QLineF side(_Projects.tableEditor().draft.at(index - 1), _Projects.tableEditor().draft.at(index));
             painter.drawText(
                 measurementTextPosition(side),
                 formattedLength(
-                    side.length() / (pixelsPerInch * m_viewScale)));
+                    side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale)));
         }
         painter.setPen(QPen(editingLineColor, 2));
     }
-    for (const QPointF &point : m_draft) {
+    for (const QPointF &point : _Projects.tableEditor().draft) {
         painter.drawEllipse(point, 5, 5);
     }
-    if (!m_draft.isEmpty()) {
+    if (!_Projects.tableEditor().draft.isEmpty()) {
         painter.setPen(QPen(editingPreviewColor, 1, Qt::DashLine));
-        painter.drawLine(m_draft.last(), m_cursor);
-        if (m_draft.size() >= 3) {
-            painter.drawEllipse(m_draft.first(), closePointDistance,
+        painter.drawLine(_Projects.tableEditor().draft.last(), _Projects.tableEditor().cursor);
+        if (_Projects.tableEditor().draft.size() >= 3) {
+            painter.drawEllipse(_Projects.tableEditor().draft.first(), closePointDistance,
                                 closePointDistance);
         }
     }

@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 
+class LoadedProjects;
 class QSplitter;
 class LayoutElementsView;
 class ProjectView;
@@ -21,6 +22,8 @@ private:
     void defineTableOutline();
     void showCityLayout();
     void showSettings();
+
+    LoadedProjects& _Projects;
 
     QSplitter *_splitter = nullptr;
     LayoutElementsView* _layoutElementsView = nullptr;
