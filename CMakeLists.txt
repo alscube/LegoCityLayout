@@ -8,7 +8,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Svg)
 
 qt_add_executable(LegoCityLayout
     src/main.cpp
@@ -48,7 +48,7 @@ qt_add_executable(LegoCityLayout
     resources.qrc
 )
 
-target_link_libraries(LegoCityLayout PRIVATE Qt6::Widgets)
+target_link_libraries(LegoCityLayout PRIVATE Qt6::Widgets Qt6::Svg)
 
 set_target_properties(LegoCityLayout PROPERTIES
     MACOSX_BUNDLE TRUE

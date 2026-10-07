@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QSize>
 
 class LayoutElement;
 class QWidget;
@@ -13,5 +14,12 @@ public:
     const QList<LayoutElement *> &elements() const;
 
 private:
+    struct PlateDefinition {
+        const char *name;
+        const char *resourcePath;
+        QSize sizeInStuds;
+    };
+    static const PlateDefinition standardPlates[];
+
     QList<LayoutElement *> m_elements;
 };

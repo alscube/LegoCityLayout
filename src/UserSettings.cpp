@@ -1,5 +1,7 @@
 #include "UserSettings.h"
 
+#include <QCoreApplication>
+
 namespace {
 constexpr auto splitterStateKey = "mainWindow/splitterState";
 constexpr auto mainWindowGeometryKey = "mainWindow/geometry";
@@ -41,15 +43,52 @@ void UserSettings::setMainWindowGeometry(const QByteArray &geometry)
 
 UserSettings::MeasurementSystem UserSettings::measurementSystem() const
 {
-    return m_settings.value(measurementSystemKey).toString() == metricValue
-               ? MeasurementSystem::Metric
-               : MeasurementSystem::Imperial;
+    const QString value = m_settings.value(measurementSystemKey).toString();
+    if (value == metricValue) return MeasurementSystem::Metric;
+    if (value == QStringLiteral("studs")) return MeasurementSystem::Studs;
+    if (value == QStringLiteral("plates")) return MeasurementSystem::Plates;
+    return MeasurementSystem::Imperial;
 }
 
 void UserSettings::setMeasurementSystem(MeasurementSystem system)
 {
-    m_settings.setValue(measurementSystemKey,
-                        system == MeasurementSystem::Metric
-                            ? metricValue
-                            : "imperial");
+    QString value;
+    switch (system) {
+    case MeasurementSystem::Metric: value = QStringLiteral("metric"); break;
+    case MeasurementSystem::Studs: value = QStringLiteral("studs"); break;
+    case MeasurementSystem::Plates: value = QStringLiteral("plates"); break;
+    default: value = QStringLiteral("imperial"); break;
+    }
+    m_settings.setValue(measurementSystemKey, value);
+}
+
+QString UserSettings::measurementAbbreviation() const
+{
+    switch (measurementSystem()) {
+    case MeasurementSystem::Metric: return QStringLiteral("MM");
+    case MeasurementSystem::Studs: return QStringLiteral("ST");
+    case MeasurementSystem::Plates: return QStringLiteral("PL");
+    default: return QStringLiteral("IN");
+    }
+}
+
+QString UserSettings::measurementName() const
+{
+    switch (measurementSystem()) {
+    case MeasurementSystem::Metric: return QCoreApplication::translate("UserSettings", "Millimeters");
+    case MeasurementSystem::Studs: return QCoreApplication::translate("UserSettings", "Studs");
+    case MeasurementSystem::Plates: return QCoreApplication::translate("UserSettings", "Plates");
+    default: return QCoreApplication::translate("UserSettings", "Inches");
+    }
+}
+
+double UserSettings::measurementUnitsPerInch() const
+{
+    // Preserve the layout's nominal baseplate scale: 10 in = 255 mm = 32 studs = 1 plate.
+    switch (measurementSystem()) {
+    case MeasurementSystem::Metric: return 25.5;
+    case MeasurementSystem::Studs: return 3.2;
+    case MeasurementSystem::Plates: return 0.1;
+    default: return 1.0;
+    }
 }

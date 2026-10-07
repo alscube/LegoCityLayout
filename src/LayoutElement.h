@@ -2,6 +2,7 @@
 
 #include <QPoint>
 #include <QString>
+#include <QSize>
 #include <QWidget>
 
 class QMouseEvent;
@@ -10,7 +11,9 @@ class LayoutElement final : public QWidget
 {
 public:
     LayoutElement(const QString &name, const QString &resourcePath,
-                        QWidget *parent = nullptr);
+                  const QSize &plateSize, QWidget *parent = nullptr);
+
+    QSize plateSize() const { return m_plateSize; }
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -20,5 +23,6 @@ protected:
 private:
     QString m_name;
     QString m_resourcePath;
+    QSize m_plateSize; // Width and height in studs.
     QPoint m_dragStartPosition;
 };

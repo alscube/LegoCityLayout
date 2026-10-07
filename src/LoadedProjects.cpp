@@ -1,5 +1,8 @@
 #include "LoadedProjects.h"
 
+#include "CityLayoutElement.h"
+#include <QtMath>
+
 LoadedProjects &LoadedProjects::instance()
 {
     static LoadedProjects projects;
@@ -78,3 +81,28 @@ CityLayoutElements &LoadedProjects::cityLayouts() { Q_ASSERT(currentProject()); 
 //const CityLayoutElements &LoadedProjects::cityLayouts() const { Q_ASSERT(currentProject()); return currentProject()->cityLayouts; }
 TableEditorState& LoadedProjects::tableEditor() { Q_ASSERT(currentProject()); return currentProject()->tableEditor; }
 //const TableEditorState& LoadedProjects::tableEditor() const { Q_ASSERT(currentProject()); return currentProject()->tableEditor; }
+
+void LoadedProjects::setViewZoom(const QPointF &anchor, qreal zoomFactor)
+{
+    ProjectData *project = currentProject();
+    if (!project) return;
+    const qreal newZoom = qBound(0.25, zoomFactor, 4.0);
+    const qreal relativeScale = newZoom / project->zoomFactor;
+    project->tableEditor.viewScale = newZoom;
+    if (qFuzzyCompare(newZoom, project->zoomFactor)) return;
+
+    project->cityLayouts.zoomAllElements(anchor, relativeScale, newZoom);
+    project->tableDefinition.scale(anchor, relativeScale);
+    auto &editor = project->tableEditor;
+    const auto scaledPoint = [&](const QPointF &point) {
+        return anchor + (point - anchor) * relativeScale;
+    };
+    for (QPointF &point : editor.draft) point = scaledPoint(point);
+    for (QLineF &side : editor.editSides) {
+        side = QLineF(scaledPoint(side.p1()), scaledPoint(side.p2()));
+    }
+    editor.sideStart = scaledPoint(editor.sideStart);
+    editor.cursor = scaledPoint(editor.cursor);
+    project->gridOrigin = scaledPoint(project->gridOrigin);
+    project->zoomFactor = newZoom;
+}

@@ -3,7 +3,7 @@
 #include "UserSettings.h"
 #include <QActionGroup>
 #include <QMenu>
-#include <QPainter>
+#include <QIcon>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QToolBar>
@@ -40,62 +40,69 @@ ProjectView::ProjectView(QWidget *parent)
     , m_openOrCreateProjectView(new OpenOrCreateProjectView(this))
 
 {
-    auto *layout = new QVBoxLayout(this);
+    BuildUI( );
+}
+
+
+ProjectView::~ProjectView()
+{
+    // LoadedProjects deletes element widgets before their parent view is destroyed.
+    _Projects.clear();
+    delete m_tableDefinitionEditor;
+    delete m_cityLayoutView;
+}
+
+
+void ProjectView::BuildUI( )
+{
+    QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
+
+    AddToolBar( layout );
+    AddViews( layout );
+}
+
+
+void ProjectView::AddToolBar( QVBoxLayout *layout )
+{
     m_toolbar = new QToolBar(tr("Project tools"), this);
     m_toolbar->setObjectName(QStringLiteral("projectToolbar"));
     m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     m_toolbar->setIconSize(QSize(24, 24));
     m_toolbar->setMovable(false);
-    const auto icon = [this](int kind) {
-        QPixmap pixmap(24, 24);
-        pixmap.fill(Qt::transparent);
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(QPen(palette().color(QPalette::WindowText), 1.5));
-        if (kind == 3) {
-            painter.drawRect(4, 5, 16, 11);
-            painter.drawLine(6, 16, 6, 21);
-            painter.drawLine(18, 16, 18, 21);
-        } else if (kind == 4) {
-            painter.drawRect(3, 12, 5, 9);
-            painter.drawRect(10, 4, 5, 17);
-            painter.drawRect(17, 9, 4, 12);
-            painter.drawLine(12, 7, 13, 7);
-            painter.drawLine(12, 10, 13, 10);
-        } else if (kind == 0) {
-            painter.drawRect(3, 7, 18, 10);
-            for (int x = 6; x < 21; x += 3) painter.drawLine(x, 7, x, x % 2 ? 11 : 14);
-        } else {
-            for (int x = 4; x <= 20; x += 8) {
-                painter.drawLine(x, 4, x, 20);
-                painter.drawLine(4, x, 20, x);
-            }
-            if (kind == 2) {
-                painter.setBrush(palette().color(QPalette::Highlight));
-                painter.drawEllipse(QPointF(12, 12), 3, 3);
-            }
-        }
-        return QIcon(pixmap);
-    };
+    m_toolbar->setStyleSheet(QStringLiteral(
+        "QToolBar#projectToolbar QToolButton:checked {"
+        " background-color: #c8e6c9;"
+        " border: 1px solid #81c784;"
+        " border-radius: 4px;"
+        " }"));
+
     auto *viewGroup = new QActionGroup(m_toolbar);
-    m_tableViewAction = m_toolbar->addAction(icon(3), tr("Table View"));
+    m_tableViewAction = m_toolbar->addAction(QIcon(QStringLiteral(":/icons/table.svg")), tr("Table View"));
     m_tableViewAction->setCheckable(true);
     viewGroup->addAction(m_tableViewAction);
-    m_cityViewAction = m_toolbar->addAction(icon(4), tr("City View"));
+    m_cityViewAction = m_toolbar->addAction(QIcon(QStringLiteral(":/icons/city.svg")), tr("City View"));
     m_cityViewAction->setCheckable(true);
     viewGroup->addAction(m_cityViewAction);
     connect(m_tableViewAction, &QAction::triggered, this, &ProjectView::defineTableOutline);
     connect(m_cityViewAction, &QAction::triggered, this, &ProjectView::showCityLayout);
     m_toolbar->addSeparator();
-    m_unitsAction = m_toolbar->addAction(icon(0), tr("Units"));
+    m_unitsAction = m_toolbar->addAction(tr("Units"));
     auto *unitsMenu = new QMenu(m_toolbar);
     auto *unitsGroup = new QActionGroup(unitsMenu);
     for (auto system : {UserSettings::MeasurementSystem::Imperial,
-                        UserSettings::MeasurementSystem::Metric}) {
-        auto *action = unitsMenu->addAction(system == UserSettings::MeasurementSystem::Metric
-                                               ? tr("Centimeters") : tr("Inches"));
+                        UserSettings::MeasurementSystem::Metric,
+                        UserSettings::MeasurementSystem::Studs,
+                        UserSettings::MeasurementSystem::Plates}) {
+        QString name;
+        switch (system) {
+        case UserSettings::MeasurementSystem::Metric: name = tr("Millimeters"); break;
+        case UserSettings::MeasurementSystem::Studs: name = tr("Studs"); break;
+        case UserSettings::MeasurementSystem::Plates: name = tr("Plates"); break;
+        default: name = tr("Inches"); break;
+        }
+        auto *action = unitsMenu->addAction(name);
         action->setCheckable(true);
         unitsGroup->addAction(action);
         action->setData(static_cast<int>(system));
@@ -110,12 +117,13 @@ ProjectView::ProjectView(QWidget *parent)
         for (auto *action : unitsGroup->actions())
             action->setChecked(action->data().toInt() == static_cast<int>(UserSettings::instance().measurementSystem()));
     });
+
     auto *unitsButton = qobject_cast<QToolButton *>(m_toolbar->widgetForAction(m_unitsAction));
     unitsButton->setMenu(unitsMenu);
     unitsButton->setPopupMode(QToolButton::InstantPopup);
-    m_gridAction = m_toolbar->addAction(icon(1), tr("Show Grid"));
+    m_gridAction = m_toolbar->addAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Show Grid"));
     m_gridAction->setCheckable(true);
-    m_snapAction = m_toolbar->addAction(icon(2), tr("Snap to Grid"));
+    m_snapAction = m_toolbar->addAction(QIcon(QStringLiteral(":/icons/grid-highlight.svg")), tr("Snap to Grid"));
     m_snapAction->setCheckable(true);
     connect(m_gridAction, &QAction::toggled, this, [this](bool checked) {
         if (!_Projects.currentProject()) return;
@@ -124,29 +132,28 @@ ProjectView::ProjectView(QWidget *parent)
         m_cityLayoutView->update();
         refreshToolbar();
     });
+
     connect(m_snapAction, &QAction::toggled, this, [this](bool checked) {
         if (!_Projects.currentProject()) return;
         _Projects.tableEditor().snapToGrid = checked;
         m_tableDefinitionEditor->refreshMeasurementUnits();
         m_cityLayoutView->update();
     });
+
     layout->addWidget(m_toolbar);
+}
+
+void ProjectView::AddViews( QVBoxLayout *layout )
+{
+    // add stacked views
     m_views = new QStackedWidget(this);
     layout->addWidget(m_views);
-    connect(m_tableDefinitionEditor, &TableDefinitionEditorView::measurementUnitsChanged,
-            this, &ProjectView::refreshToolbar);
+
+    // Open / Create View
     m_views->addWidget(m_openOrCreateProjectView);
-    m_views->addWidget(m_cityLayoutView);
-    m_views->addWidget(m_tableDefinitionEditor);
-    connect(m_tableDefinitionEditor, &TableDefinitionEditorView::editingFinished,
-            this, &ProjectView::showCityLayout);
-
-    setCurrentWidget(m_openOrCreateProjectView);
-
     connect(m_openOrCreateProjectView,
             &OpenOrCreateProjectView::projectTitleAccepted,
             this, &ProjectView::initializeNewProject);
-
     connect(m_openOrCreateProjectView,
             &OpenOrCreateProjectView::openLayoutRequested,
             this, &ProjectView::openLayoutRequested);
@@ -154,15 +161,16 @@ ProjectView::ProjectView(QWidget *parent)
     connect(m_openOrCreateProjectView,
             &OpenOrCreateProjectView::openLastLayoutRequested,
             this, &ProjectView::openLastLayoutRequested);
-}
 
+    // City View
+    m_views->addWidget(m_cityLayoutView);
 
-ProjectView::~ProjectView()
-{
-    // LoadedProjects deletes element widgets before their parent view is destroyed.
-    _Projects.clear();
-    delete m_tableDefinitionEditor;
-    delete m_cityLayoutView;
+    // Table Defintion View
+    m_views->addWidget(m_tableDefinitionEditor);        
+    connect(m_tableDefinitionEditor, &TableDefinitionEditorView::measurementUnitsChanged, this, &ProjectView::refreshToolbar);
+    connect(m_tableDefinitionEditor, &TableDefinitionEditorView::editingFinished, this, &ProjectView::showCityLayout);
+
+    setCurrentWidget(m_openOrCreateProjectView);
 }
 
 
@@ -414,6 +422,8 @@ void ProjectView::refreshToolbar()
     m_gridAction->setChecked(loaded && _Projects.tableEditor().gridVisible);
     m_snapAction->setChecked(loaded && _Projects.tableEditor().snapToGrid);
     m_gridAction->setToolTip(m_gridAction->isChecked() ? tr("Hide Grid") : tr("Show Grid"));
-    const bool metric = UserSettings::instance().measurementSystem() == UserSettings::MeasurementSystem::Metric;
-    m_unitsAction->setToolTip(tr("Units: %1").arg(metric ? tr("Centimeters") : tr("Inches")));
+    const auto &settings = UserSettings::instance();
+    m_unitsAction->setIcon(QIcon(QStringLiteral(":/icons/units-%1.svg")
+                                   .arg(settings.measurementAbbreviation())));
+    m_unitsAction->setToolTip(tr("Units: %1").arg(settings.measurementName()));
 }

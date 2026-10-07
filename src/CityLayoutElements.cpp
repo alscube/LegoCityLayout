@@ -8,7 +8,6 @@
 #include "QMouseEvent"
 
 
-constexpr int snapDistance = 6;
 
 
 void CityLayoutElements::initializeCityElements(const QString &title)
@@ -139,54 +138,7 @@ bool CityLayoutElements::dragElementOnMouseMove( CityLayoutView* view, QMouseEve
     }
 
     const QPoint requestedPosition = position - view->dragOffset();
-    const int x = requestedPosition.x();
-    const int y = requestedPosition.y();
-    int snappedX = x;
-    int snappedY = y;
-    int closestHorizontalSnap = snapDistance + 1;
-    int closestVerticalSnap = snapDistance + 1;
-
-    for (CityLayoutElement* image : *this)
-    {
-        if (image == draggedElement) {
-            continue;
-        }
-
-        const QRect draggedGeometry(x, y,
-                                    draggedElement->width(),
-                                    draggedElement->height());
-        const QRect otherGeometry = image->geometry();
-
-        const auto snapEdge = [](int draggedEdge, int otherEdge,
-                                 int currentPosition, int &closestSnap,
-                                 int &snappedPosition) {
-            const int distance = qAbs(draggedEdge - otherEdge);
-            if (distance <= snapDistance && distance < closestSnap) {
-                closestSnap = distance;
-                snappedPosition = currentPosition + otherEdge - draggedEdge;
-            }
-        };
-
-        snapEdge(draggedGeometry.left(), otherGeometry.left(),
-                 x, closestHorizontalSnap, snappedX);
-        snapEdge(draggedGeometry.right(), otherGeometry.right(),
-                 x, closestHorizontalSnap, snappedX);
-        snapEdge(draggedGeometry.left(), otherGeometry.right() + 1,
-                 x, closestHorizontalSnap, snappedX);
-        snapEdge(draggedGeometry.right() + 1, otherGeometry.left(),
-                 x, closestHorizontalSnap, snappedX);
-
-        snapEdge(draggedGeometry.top(), otherGeometry.top(),
-                 y, closestVerticalSnap, snappedY);
-        snapEdge(draggedGeometry.bottom(), otherGeometry.bottom(),
-                 y, closestVerticalSnap, snappedY);
-        snapEdge(draggedGeometry.top(), otherGeometry.bottom() + 1,
-                 y, closestVerticalSnap, snappedY);
-        snapEdge(draggedGeometry.bottom() + 1, otherGeometry.top(),
-                 y, closestVerticalSnap, snappedY);
-    }
-
-    draggedElement->move(view->snappedPosition(QPoint(snappedX, snappedY)));
+    draggedElement->move(view->snappedPosition(requestedPosition, draggedElement));
 
     event->accept();
     return true;

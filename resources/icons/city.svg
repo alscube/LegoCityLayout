@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#45f51b"/>
+      <stop offset="1" stop-color="#21d909"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#9bff63"/>
+      <stop offset="0.45" stop-color="#55ec30"/>
+      <stop offset="1" stop-color="#20b90d"/>
+    </linearGradient>
+    <radialGradient id="stud" cx="35%" cy="25%" r="80%">
+      <stop offset="0" stop-color="#65f637"/>
+      <stop offset="1" stop-color="#32db11"/>
+    </radialGradient>
+    <g id="raised-stud">
+      <circle cy="0.22" r="1.67" fill="#148b08" opacity="0.24"/>
+      <circle r="1.58" fill="url(#rim)"/>
+      <circle r="1.32" fill="url(#stud)"/>
+      <path d="M-1.05 -0.85A1.35 1.35 0 0 1 0.75 -1.15" fill="none" stroke="#b3ff80" stroke-width="0.15" stroke-linecap="round" opacity="0.7"/>
+    </g>
+  </defs>
+  <rect x="1" y="1" width="22" height="22" rx="0.6" fill="url(#plate)"/>
+  <use href="#raised-stud" x="3.2" y="3.2"/>
+  <use href="#raised-stud" x="7.6" y="3.2"/>
+  <use href="#raised-stud" x="12" y="3.2"/>
+  <use href="#raised-stud" x="16.4" y="3.2"/>
+  <use href="#raised-stud" x="20.8" y="3.2"/>
+  <use href="#raised-stud" x="3.2" y="7.6"/>
+  <use href="#raised-stud" x="7.6" y="7.6"/>
+  <use href="#raised-stud" x="12" y="7.6"/>
+  <use href="#raised-stud" x="16.4" y="7.6"/>
+  <use href="#raised-stud" x="20.8" y="7.6"/>
+  <use href="#raised-stud" x="3.2" y="12"/>
+  <use href="#raised-stud" x="7.6" y="12"/>
+  <use href="#raised-stud" x="12" y="12"/>
+  <use href="#raised-stud" x="16.4" y="12"/>
+  <use href="#raised-stud" x="20.8" y="12"/>
+  <use href="#raised-stud" x="3.2" y="16.4"/>
+  <use href="#raised-stud" x="7.6" y="16.4"/>
+  <use href="#raised-stud" x="12" y="16.4"/>
+  <use href="#raised-stud" x="16.4" y="16.4"/>
+  <use href="#raised-stud" x="20.8" y="16.4"/>
+  <use href="#raised-stud" x="3.2" y="20.8"/>
+  <use href="#raised-stud" x="7.6" y="20.8"/>
+  <use href="#raised-stud" x="12" y="20.8"/>
+  <use href="#raised-stud" x="16.4" y="20.8"/>
+  <use href="#raised-stud" x="20.8" y="20.8"/>
+</svg>

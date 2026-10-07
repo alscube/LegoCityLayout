@@ -27,6 +27,7 @@ public:
     int projectCount() const;
     int currentProjectIndex() const;
     bool setCurrentProjectIndex(int index);
+    void setViewZoom(const QPointF &anchor, qreal zoomFactor);
 
     ProjectData* project(int index);
 //    const ProjectData* project(int index) const;

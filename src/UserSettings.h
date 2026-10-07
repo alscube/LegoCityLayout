@@ -8,7 +8,9 @@ class UserSettings final
 public:
     enum class MeasurementSystem {
         Imperial,
-        Metric
+        Metric,
+        Studs,
+        Plates
     };
 
     static UserSettings &instance();
@@ -26,6 +28,9 @@ public:
 
     MeasurementSystem measurementSystem() const;
     void setMeasurementSystem(MeasurementSystem system);
+    QString measurementAbbreviation() const;
+    QString measurementName() const;
+    double measurementUnitsPerInch() const;
 
 private:
     UserSettings();

@@ -23,7 +23,8 @@ public:
     explicit CityLayoutView(QWidget *parent = nullptr);
 
     void activateProject();
-    QPoint snappedPosition(const QPoint &position) const;
+    QPoint snappedPosition(const QPoint &position,
+                           const CityLayoutElement *movingElement = nullptr) const;
     QPointF projectPoint(const QPointF &point) const;
     QJsonObject savedLayout() const;
     quint64 changeRevision() const;
@@ -51,6 +52,7 @@ protected:
 
 private:
     void panBy(const QPoint &offset);
+    void rotateSelectedPlate(int quarterTurns);
 
     LoadedProjects &_Projects;
     QPoint m_dragOffset;

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <g fill="none" stroke="#202020" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Angled tabletop and front edge. -->
+    <path d="M1.2 7.5L4.6 3.2H19.4L22.8 7.5Z"/>
+    <path d="M1.2 7.5V8.8H22.8V7.5"/>
+    <!-- Rear legs and support rail. -->
+    <path d="M5 10.4V14.6H6.3V10.4 M17.7 10.4V14.6H19V10.4"/>
+    <path d="M3.8 10.4H20.2"/>
+    <!-- Front legs. -->
+    <path d="M2.4 8.8V18.4H3.8V8.8 M20.2 8.8V18.4H21.6V8.8"/>
+  </g>
+</svg>

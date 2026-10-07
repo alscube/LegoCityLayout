@@ -4,13 +4,16 @@
 
 #include "TableDefinition.h"
 #include "TableSurface.h"
+#include "CityLayoutElement.h"
 #include "LoadedProjects.h"
 #include "UserSettings.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFocusEvent>
 #include <QFormLayout>
+#include <QFontMetricsF>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -19,6 +22,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QWidget>
+#include <QWheelEvent>
 #include <QVBoxLayout>
 #include <QtMath>
 
@@ -27,29 +31,17 @@
 
 namespace {
 constexpr qreal gridSizeInches = 10.0;
-constexpr qreal gridSizeCentimeters = 25.5;
 constexpr qreal gridSpacing = 64.0;
 constexpr qreal pixelsPerInch = gridSpacing / gridSizeInches;
 constexpr qreal closePointDistance = 14.0;
 constexpr qreal endpointSelectionDistance = 7.0;
 constexpr qreal sideSelectionDistance = 12.0;
-// Use the nominal baseplate dimensions so a grid square is 10 in or 25.5 cm.
-constexpr qreal centimetersPerNominalInch =
-    gridSizeCentimeters / gridSizeInches;
-
-bool usesMetricMeasurements()
-{
-    return UserSettings::instance().measurementSystem()
-           == UserSettings::MeasurementSystem::Metric;
-}
-
 QString formattedLength(qreal inches)
 {
-    if (usesMetricMeasurements()) {
-        return QObject::tr("%1 cm").arg(inches * centimetersPerNominalInch,
-                                          0, 'f', 2);
-    }
-    return QObject::tr("%1 in").arg(inches, 0, 'f', 2);
+    const auto &settings = UserSettings::instance();
+    return QObject::tr("%1 %2")
+        .arg(inches * settings.measurementUnitsPerInch(), 0, 'f', 2)
+        .arg(settings.measurementAbbreviation());
 }
 
 QPointF measurementTextPosition(const QLineF &side)
@@ -217,11 +209,11 @@ bool getSideMeasurements(QWidget *parent, qreal suggestedLength,
 
     auto *layout = new QFormLayout(&dialog);
     auto *lengthInput = new QDoubleSpinBox(&dialog);
-    const bool metric = usesMetricMeasurements();
-    const qreal displayScale = metric ? centimetersPerNominalInch : 1.0;
-    lengthInput->setRange(0.1, 1000.0 * displayScale);
+    const auto &settings = UserSettings::instance();
+    const qreal displayScale = settings.measurementUnitsPerInch();
+    lengthInput->setRange(0.1 * displayScale, 1000.0 * displayScale);
     lengthInput->setDecimals(2);
-    lengthInput->setSuffix(metric ? QObject::tr(" cm") : QObject::tr(" in"));
+    lengthInput->setSuffix(QStringLiteral(" ") + settings.measurementAbbreviation());
     lengthInput->setValue(suggestedLength * displayScale);
 
     auto *angleInput = new QDoubleSpinBox(&dialog);
@@ -284,7 +276,8 @@ TableDefinitionEditorView::TableDefinitionEditorView(QWidget *parent)
 
     auto *instructions = new QLabel(
         tr("Press and drag to draw a side.  Connect points to close.  "
-            "Select line and press Delete key to remove."), this);
+            "Select line and press Delete key to remove.  "
+            "Middle-drag or Space + drag to pan.  Scroll to zoom."), this);
     instructions->setAlignment(Qt::AlignCenter);
     instructions->setContentsMargins(12, 10, 12, 10);
     instructions->setStyleSheet(
@@ -296,7 +289,10 @@ TableDefinitionEditorView::TableDefinitionEditorView(QWidget *parent)
 void TableDefinitionEditorView::activateProject()
 {
     if (!_Projects.currentProject()) return;
-    unsetCursor();
+    m_panButton = Qt::NoButton;
+    m_spaceHeld = false;
+    if (_Projects.tableEditor().active) setCursor(Qt::CrossCursor);
+    else unsetCursor();
     update();
 }
 
@@ -321,6 +317,8 @@ void TableDefinitionEditorView::begin()
 
 void TableDefinitionEditorView::reset()
 {
+    m_panButton = Qt::NoButton;
+    m_spaceHeld = false;
     _Projects.tableEditor().draft.clear();
     _Projects.tableEditor().editSides.clear();
     _Projects.tableEditor().draftSurfaceName.clear();
@@ -335,7 +333,8 @@ void TableDefinitionEditorView::reset()
 
 void TableDefinitionEditorView::resetViewScale()
 {
-    _Projects.tableEditor().viewScale = 1.0;
+    _Projects.setViewZoom(rect().center(), 1.0);
+    update();
 }
 
 void TableDefinitionEditorView::refreshMeasurementUnits()
@@ -353,13 +352,25 @@ QPointF TableDefinitionEditorView::snappedPoint(const QPointF &point) const
     }
 
     const qreal spacing = gridSpacing * _Projects.tableEditor().viewScale;
-    return QPointF(qRound(point.x() / spacing) * spacing,
-                   qRound(point.y() / spacing) * spacing);
+    const QPointF origin = _Projects.currentProject()->gridOrigin;
+    const QPointF relative = point - origin;
+    return origin + QPointF(qRound(relative.x() / spacing) * spacing,
+                            qRound(relative.y() / spacing) * spacing);
 }
 
 void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (!_Projects.tableEditor().drawingSide
+        && (event->button() == Qt::MiddleButton
+            || (event->button() == Qt::LeftButton && m_spaceHeld))) {
+        m_panButton = event->button();
+        m_lastPanPosition = event->position();
+        setFocus(Qt::MouseFocusReason);
+        setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
+    }
     if (event->button() != Qt::LeftButton) {
         QWidget::mousePressEvent(event);
         return;
@@ -390,7 +401,11 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
             event->accept();
             return;
         }
-        QWidget::mousePressEvent(event);
+        m_panButton = Qt::LeftButton;
+        m_lastPanPosition = event->position();
+        setFocus(Qt::MouseFocusReason);
+        setCursor(Qt::ClosedHandCursor);
+        event->accept();
         return;
     }
 
@@ -505,6 +520,15 @@ void TableDefinitionEditorView::mousePressEvent(QMouseEvent *event)
 void TableDefinitionEditorView::mouseMoveEvent(QMouseEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (m_panButton != Qt::NoButton) {
+        if (event->buttons().testFlag(m_panButton)) {
+            panBy(event->position() - m_lastPanPosition);
+            m_lastPanPosition = event->position();
+            event->accept();
+            return;
+        }
+        stopPanning();
+    }
     if (!_Projects.tableEditor().active || !_Projects.tableEditor().drawingSide) {
         QWidget::mouseMoveEvent(event);
         return;
@@ -518,6 +542,11 @@ void TableDefinitionEditorView::mouseMoveEvent(QMouseEvent *event)
 void TableDefinitionEditorView::mouseReleaseEvent(QMouseEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (m_panButton != Qt::NoButton && event->button() == m_panButton) {
+        stopPanning();
+        event->accept();
+        return;
+    }
     if (!_Projects.tableEditor().active || !_Projects.tableEditor().drawingSide || event->button() != Qt::LeftButton) {
         QWidget::mouseReleaseEvent(event);
         return;
@@ -624,6 +653,12 @@ void TableDefinitionEditorView::keyPressEvent(QKeyEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
     int keyPressed = event->key();
+    if (keyPressed == Qt::Key_Space) {
+        m_spaceHeld = true;
+        if (m_panButton == Qt::NoButton) setCursor(Qt::OpenHandCursor);
+        event->accept();
+        return;
+    }
 
     if (!_Projects.tableEditor().active) {
         if ((keyPressed == Qt::Key_Delete || keyPressed == Qt::Key_Backspace)
@@ -808,10 +843,15 @@ void TableDefinitionEditorView::paintEvent(QPaintEvent *event)
         painter.setRenderHint(QPainter::Antialiasing, false);
         painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
         const qreal scaledGridSpacing = gridSpacing * _Projects.tableEditor().viewScale;
-        for (qreal x = 0.0; x <= width(); x += scaledGridSpacing) {
+        const QPointF origin = _Projects.currentProject()->gridOrigin;
+        qreal firstX = std::fmod(origin.x(), scaledGridSpacing);
+        qreal firstY = std::fmod(origin.y(), scaledGridSpacing);
+        if (firstX < 0) firstX += scaledGridSpacing;
+        if (firstY < 0) firstY += scaledGridSpacing;
+        for (qreal x = firstX; x <= width(); x += scaledGridSpacing) {
             painter.drawLine(QPointF(x, 0.0), QPointF(x, height()));
         }
-        for (qreal y = 0.0; y <= height(); y += scaledGridSpacing) {
+        for (qreal y = firstY; y <= height(); y += scaledGridSpacing) {
             painter.drawLine(QPointF(0.0, y), QPointF(width(), y));
         }
     }
@@ -878,6 +918,8 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
         if (_Projects.tableEditor().drawingSide) {
             painter.setPen(QPen(editingPreviewColor, 1, Qt::DashLine));
             painter.drawLine(_Projects.tableEditor().sideStart, _Projects.tableEditor().cursor);
+            paintLiveMeasurement(painter, QLineF(_Projects.tableEditor().sideStart,
+                                                  _Projects.tableEditor().cursor));
         }
         return;
     }
@@ -906,5 +948,91 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
             painter.drawEllipse(_Projects.tableEditor().draft.first(), closePointDistance,
                                 closePointDistance);
         }
+        if (_Projects.tableEditor().drawingSide) {
+            paintLiveMeasurement(painter, QLineF(_Projects.tableEditor().draft.last(),
+                                                  _Projects.tableEditor().cursor));
+        }
     }
+}
+
+void TableDefinitionEditorView::paintLiveMeasurement(QPainter &painter,
+                                                    const QLineF &side) const
+{
+    const QString text = formattedLength(
+        side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale));
+    const QFontMetricsF metrics(painter.font());
+    QRectF label(0, 0, metrics.horizontalAdvance(text) + 12, metrics.height() + 6);
+
+    // Offset the whole label from the line, including for vertical and diagonal sides.
+    const QPointF normal = qFuzzyIsNull(side.length())
+                               ? QPointF(0, -1)
+                               : (measurementTextPosition(side) - side.center()) / 12.0;
+    const qreal clearance = qAbs(normal.x()) * label.width() / 2
+                            + qAbs(normal.y()) * label.height() / 2 + 8;
+    label.moveCenter(side.center() + normal * clearance);
+    label.moveLeft(qBound(4.0, label.left(), qMax(4.0, width() - label.width() - 4)));
+    label.moveTop(qBound(4.0, label.top(), qMax(4.0, height() - label.height() - 4)));
+
+    painter.save();
+    painter.setPen(QPen(palette().color(QPalette::Mid), 1));
+    painter.setBrush(palette().color(QPalette::Base));
+    painter.drawRoundedRect(label, 4, 4);
+    painter.setPen(palette().color(QPalette::Text));
+    painter.drawText(label, Qt::AlignCenter, text);
+    painter.restore();
+}
+
+void TableDefinitionEditorView::panBy(const QPointF &offset)
+{
+    _Projects.tableDefinition().translate(offset);
+    auto &editor = _Projects.tableEditor();
+    editor.draft.translate(offset);
+    for (QLineF &side : editor.editSides) side.translate(offset);
+    editor.sideStart += offset;
+    editor.cursor += offset;
+    for (CityLayoutElement *plate : _Projects.cityLayouts()) {
+        plate->move((QPointF(plate->pos()) + offset).toPoint());
+    }
+    _Projects.currentProject()->gridOrigin += offset;
+    update();
+}
+
+void TableDefinitionEditorView::stopPanning()
+{
+    m_panButton = Qt::NoButton;
+    if (m_spaceHeld) setCursor(Qt::OpenHandCursor);
+    else if (_Projects.currentProject() && _Projects.tableEditor().active) setCursor(Qt::CrossCursor);
+    else unsetCursor();
+}
+
+void TableDefinitionEditorView::keyReleaseEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Space && !event->isAutoRepeat()) {
+        m_spaceHeld = false;
+        if (m_panButton == Qt::NoButton) stopPanning();
+        event->accept();
+        return;
+    }
+    QWidget::keyReleaseEvent(event);
+}
+
+void TableDefinitionEditorView::focusOutEvent(QFocusEvent *event)
+{
+    m_spaceHeld = false;
+    stopPanning();
+    QWidget::focusOutEvent(event);
+}
+
+void TableDefinitionEditorView::wheelEvent(QWheelEvent *event)
+{
+    if (!_Projects.currentProject()) { event->ignore(); return; }
+    const int wheelDelta = event->angleDelta().y();
+    if (wheelDelta == 0) {
+        QWidget::wheelEvent(event);
+        return;
+    }
+    _Projects.setViewZoom(event->position(),
+                         _Projects.currentProject()->zoomFactor * std::pow(1.0015, wheelDelta));
+    update();
+    event->accept();
 }

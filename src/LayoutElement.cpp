@@ -4,6 +4,8 @@
 #include <QApplication>
 #include <QDrag>
 #include <QLabel>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPixmap>
@@ -12,13 +14,15 @@
 namespace {
 constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
 constexpr auto layoutElementNameMimeType = "application/x-legocity-layout-element-name";
+constexpr auto layoutElementSizeMimeType = "application/x-legocity-layout-element-size";
 constexpr int dragThumbnailSize = 120;
 }
 
 LayoutElement::LayoutElement(const QString &name,
                                          const QString &resourcePath,
+                                         const QSize &plateSize,
                                          QWidget *parent)
-    : QWidget(parent), m_name(name), m_resourcePath(resourcePath)
+    : QWidget(parent), m_name(name), m_resourcePath(resourcePath), m_plateSize(plateSize)
 {
     setCursor(Qt::OpenHandCursor);
     setObjectName(QStringLiteral("layoutElementWidget"));
@@ -66,6 +70,9 @@ void LayoutElement::mouseMoveEvent(QMouseEvent *event)
     auto *mimeData = new QMimeData;
     mimeData->setData(layoutElementMimeType, m_resourcePath.toUtf8());
     mimeData->setData(layoutElementNameMimeType, m_name.toUtf8());
+    mimeData->setData(layoutElementSizeMimeType, QJsonDocument(QJsonObject{
+        {QStringLiteral("widthStuds"), m_plateSize.width()},
+        {QStringLiteral("heightStuds"), m_plateSize.height()}}).toJson(QJsonDocument::Compact));
 
     auto *drag = new QDrag(this);
     drag->setMimeData(mimeData);

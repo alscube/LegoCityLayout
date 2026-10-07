@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+class QVBoxLayout;
 class QStackedWidget;
 class QToolBar;
 class QAction;
@@ -35,6 +36,10 @@ signals:
     void openLastLayoutRequested();
 
 private:
+    void BuildUI( );
+    void AddToolBar( QVBoxLayout* layout );
+    void AddViews( QVBoxLayout* layout );
+
     void refreshToolbar();
     void setCurrentWidget(QWidget *widget);
     QWidget *currentWidget() const;
@@ -53,3 +58,4 @@ private:
     TableDefinitionEditorView *m_tableDefinitionEditor = nullptr;
     OpenOrCreateProjectView *m_openOrCreateProjectView = nullptr;
 };
+

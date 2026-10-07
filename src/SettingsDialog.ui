@@ -38,7 +38,17 @@
        </item>
        <item>
         <property name="text">
-         <string>Metric (centimeters)</string>
+         <string>Metric (millimeters)</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Studs</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Plates</string>
         </property>
        </item>
       </widget>

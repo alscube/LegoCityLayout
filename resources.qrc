@@ -8,4 +8,15 @@
         <file alias="BasePlate48x48Gray.png">resources/BasePlate48x48Gray.png</file>
         <file alias="TestPlate.png">resources/TestPlate.png</file>
     </qresource>
+    <qresource prefix="/icons">
+        <file alias="units-IN.svg">resources/icons/units-IN.svg</file>
+        <file alias="units-MM.svg">resources/icons/units-MM.svg</file>
+        <file alias="units-ST.svg">resources/icons/units-ST.svg</file>
+        <file alias="units-PL.svg">resources/icons/units-PL.svg</file>
+        <file alias="ruler.svg">resources/icons/ruler.svg</file>
+        <file alias="grid.svg">resources/icons/grid.svg</file>
+        <file alias="grid-highlight.svg">resources/icons/grid-highlight.svg</file>
+        <file alias="table.svg">resources/icons/table.svg</file>
+        <file alias="city.svg">resources/icons/city.svg</file>
+    </qresource>
 </RCC>

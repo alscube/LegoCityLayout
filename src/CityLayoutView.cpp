@@ -1,6 +1,7 @@
 
 #include <QBuffer>
 #include <QJsonArray>
+#include <QJsonDocument>
 
 #include "CityLayoutView.h"
 #include "CityLayoutElement.h"
@@ -28,6 +29,7 @@
 namespace {
 constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
 constexpr auto layoutElementNameMimeType = "application/x-legocity-layout-element-name";
+constexpr auto layoutElementSizeMimeType = "application/x-legocity-layout-element-size";
 constexpr qreal minimumZoom = 0.25;
 constexpr qreal maximumZoom = 4.0;
 constexpr int snapDistance = 6;
@@ -35,6 +37,8 @@ constexpr qreal pixelsPerInch = 12.8;
 constexpr qreal gridSizeInches = 10.0;
 constexpr qreal gridVisualScale = 0.5;
 constexpr qreal gridSpacing = pixelsPerInch * gridSizeInches * gridVisualScale;
+// One city grid square represents a standard 32-stud baseplate.
+constexpr qreal pixelsPerStud = gridSpacing / 32.0;
 }
 
 
@@ -88,18 +92,24 @@ void CityLayoutView::dropEvent(QDropEvent *event)
         event->mimeData()->data(layoutElementMimeType));
     const QString name = QString::fromUtf8(
         event->mimeData()->data(layoutElementNameMimeType));
+    const QJsonObject sizeData = QJsonDocument::fromJson(
+        event->mimeData()->data(layoutElementSizeMimeType)).object();
+    const QSize plateSize(sizeData.value(QStringLiteral("widthStuds")).toInt(),
+                          sizeData.value(QStringLiteral("heightStuds")).toInt());
     const QPixmap pixmap(resourcePath);
-    if (pixmap.isNull()) {
+    if (pixmap.isNull() || plateSize.width() <= 0 || plateSize.height() <= 0) {
         event->ignore();
         return;
     }
 
-    auto *layoutElement = new CityLayoutElement(name, pixmap, _Projects.currentProject()->zoomFactor, this);
+    auto *layoutElement = new CityLayoutElement(
+        name, pixmap, plateSize, pixelsPerStud,
+        _Projects.currentProject()->zoomFactor, this);
 
     const QPoint requestedPosition = event->position().toPoint()
                                      - QPoint(layoutElement->width() / 2,
                                               layoutElement->height() / 2);
-    layoutElement->move(snappedPosition(requestedPosition));
+    layoutElement->move(snappedPosition(requestedPosition, layoutElement));
     layoutElement->show();
     _Projects.cityLayouts().append(layoutElement);
     ++_Projects.currentProject()->changeRevision;
@@ -246,14 +256,7 @@ void CityLayoutView::wheelEvent(QWheelEvent *event)
         return;
     }
 
-    const qreal relativeScale = newZoom / _Projects.currentProject()->zoomFactor;
-    const QPointF anchor = event->position();
-
-    _Projects.cityLayouts().zoomAllElements( anchor, relativeScale, newZoom );
-    _Projects.tableDefinition().scale(anchor, relativeScale);
-    _Projects.currentProject()->gridOrigin = anchor + (_Projects.currentProject()->gridOrigin - anchor) * relativeScale;
-
-    _Projects.currentProject()->zoomFactor = newZoom;
+    _Projects.setViewZoom(event->position(), newZoom);
     update();
     event->accept();
 }
@@ -273,6 +276,13 @@ void CityLayoutView::panBy(const QPoint &offset)
 void CityLayoutView::keyPressEvent(QKeyEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (event->key() == Qt::Key_R
+        && !(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))
+        && _Projects.cityLayouts().selectedElement()) {
+        rotateSelectedPlate(event->modifiers() & Qt::ShiftModifier ? -1 : 1);
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Delete )
     {
         if ( _Projects.cityLayouts().deleteSelectedElement() )
@@ -338,8 +348,16 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     _Projects.cityLayouts().setSelectedElement(layoutElement);
 
     QMenu menu(this);
+    QAction *clockwiseAction = menu.addAction(tr("Rotate Clockwise (R)"));
+    QAction *counterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise (Shift+R)"));
+    menu.addSeparator();
     QAction *deleteAction = menu.addAction(tr("Delete"));
-    if (menu.exec(event->globalPos()) == deleteAction) {
+    QAction *chosenAction = menu.exec(event->globalPos());
+    if (chosenAction == clockwiseAction) {
+        rotateSelectedPlate(1);
+    } else if (chosenAction == counterclockwiseAction) {
+        rotateSelectedPlate(-1);
+    } else if (chosenAction == deleteAction) {
         if (_Projects.cityLayouts().deleteSelectedElement()) {
             ++_Projects.currentProject()->changeRevision;
         }
@@ -370,6 +388,9 @@ QJsonObject CityLayoutView::savedLayout() const
         element->pixmap().save(&buffer, "PNG");
         elements.append(QJsonObject{
             {QStringLiteral("name"), element->name()},
+            {QStringLiteral("widthStuds"), element->plateSize().width()},
+            {QStringLiteral("heightStuds"), element->plateSize().height()},
+            {QStringLiteral("rotationDegrees"), element->rotationDegrees()},
             {QStringLiteral("x"), element->x()},
             {QStringLiteral("y"), element->y()},
             {QStringLiteral("imagePngBase64"), QString::fromLatin1(image.toBase64())}});
@@ -387,12 +408,67 @@ quint64 CityLayoutView::changeRevision() const
 }
 
 
-QPoint CityLayoutView::snappedPosition(const QPoint &position) const
+QPoint CityLayoutView::snappedPosition(const QPoint &position,
+                                     const CityLayoutElement *movingElement) const
 {
-    if (!_Projects.currentProject() || !_Projects.tableEditor().snapToGrid) return position;
+    if (!_Projects.currentProject()) return position;
     const auto *project = _Projects.currentProject();
-    const qreal spacing = gridSpacing * project->zoomFactor;
-    const QPointF relative = position - project->gridOrigin;
-    return (project->gridOrigin + QPointF(qRound(relative.x() / spacing) * spacing,
-                                         qRound(relative.y() / spacing) * spacing)).toPoint();
+    QPoint result = position;
+    if (_Projects.tableEditor().snapToGrid) {
+        const qreal spacing = gridSpacing * project->zoomFactor;
+        const QPointF relative = position - project->gridOrigin;
+        result = (project->gridOrigin
+                  + QPointF(qRound(relative.x() / spacing) * spacing,
+                            qRound(relative.y() / spacing) * spacing)).toPoint();
+    }
+    if (!movingElement) return result;
+
+    int closestX = snapDistance + 1;
+    int closestY = snapDistance + 1;
+    const int left = position.x();
+    const int top = position.y();
+    const int right = left + movingElement->width();
+    const int bottom = top + movingElement->height();
+    for (const CityLayoutElement *other : _Projects.cityLayouts()) {
+        if (other == movingElement) continue;
+        const int otherLeft = other->x();
+        const int otherTop = other->y();
+        const int otherRight = otherLeft + other->width();
+        const int otherBottom = otherTop + other->height();
+
+        // Only attract nearby plates; distant edges sharing an axis should not snap.
+        if (top <= otherBottom + snapDistance && bottom >= otherTop - snapDistance) {
+            for (int movingEdge : {left, right}) {
+                for (int targetEdge : {otherLeft, otherRight}) {
+                    const int delta = targetEdge - movingEdge;
+                    if (qAbs(delta) <= snapDistance && qAbs(delta) < closestX) {
+                        closestX = qAbs(delta);
+                        result.setX(left + delta);
+                    }
+                }
+            }
+        }
+        if (left <= otherRight + snapDistance && right >= otherLeft - snapDistance) {
+            for (int movingEdge : {top, bottom}) {
+                for (int targetEdge : {otherTop, otherBottom}) {
+                    const int delta = targetEdge - movingEdge;
+                    if (qAbs(delta) <= snapDistance && qAbs(delta) < closestY) {
+                        closestY = qAbs(delta);
+                        result.setY(top + delta);
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+void CityLayoutView::rotateSelectedPlate(int quarterTurns)
+{
+    if (!_Projects.currentProject()) return;
+    CityLayoutElement *plate = _Projects.cityLayouts().selectedElement();
+    if (!plate) return;
+    plate->rotateQuarterTurns(quarterTurns);
+    ++_Projects.currentProject()->changeRevision;
+    update();
 }
