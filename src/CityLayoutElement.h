@@ -19,6 +19,8 @@ public:
     QSize plateSize() const { return m_plateSize; }
     void setZoomFactor(qreal zoomFactor);
     QPixmap savedPixmap() const;
+    // Stud-aligned body bounds, excluding artwork margins and connector overhangs.
+    QRectF footprintRect() const;
     void rotateQuarterTurns(int turns);
     int rotationDegrees() const { return m_quarterTurns * 90; }
 
@@ -27,6 +29,8 @@ private:
     QPixmap m_originalPixmap;
     QSize m_plateSize;
     QSizeF m_unscaledSize;
+    QRect m_sourceBounds;
+    QRectF m_unscaledFootprint;
     qreal m_zoomFactor = 1.0;
     int m_quarterTurns = 0;
 };

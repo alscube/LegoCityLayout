@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 
 #include "CityLayoutView.h"
+#include "LegoGrid.h"
 #include "CityLayoutElement.h"
 #include "LoadedProjects.h"
 
@@ -33,12 +34,8 @@ constexpr auto layoutElementSizeMimeType = "application/x-legocity-layout-elemen
 constexpr qreal minimumZoom = 0.25;
 constexpr qreal maximumZoom = 24.0;
 constexpr int snapDistance = 6;
-constexpr qreal pixelsPerInch = 12.8;
-constexpr qreal gridSizeInches = 10.0;
-constexpr qreal gridVisualScale = 0.5;
-constexpr qreal gridSpacing = pixelsPerInch * gridSizeInches * gridVisualScale;
-// One city grid square represents a standard 32-stud baseplate.
-constexpr qreal pixelsPerStud = gridSpacing / 32.0;
+constexpr qreal gridSpacing = LegoGrid::plateSpacing;
+constexpr qreal pixelsPerStud = LegoGrid::pixelsPerStud;
 }
 
 
@@ -323,7 +320,13 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
     if (!_Projects.tableDefinition().isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));
         painter.setBrush(QColor(181, 143, 92, 120));
-        painter.drawPath(_Projects.tableDefinition().usableArea());
+        const QPainterPath surface = _Projects.tableDefinition().usableArea();
+        painter.drawPath(surface);
+        if (_Projects.tableEditor().gridVisible) {
+            LegoGrid::paintStuds(painter, surface, rect(),
+                                 _Projects.currentProject()->gridOrigin,
+                                 _Projects.currentProject()->zoomFactor);
+        }
     }
     if (!_Projects.tableDefinition().openSides().isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));
@@ -391,6 +394,7 @@ QJsonObject CityLayoutView::savedLayout() const
             {QStringLiteral("widthStuds"), element->plateSize().width()},
             {QStringLiteral("heightStuds"), element->plateSize().height()},
             {QStringLiteral("rotationDegrees"), element->rotationDegrees()},
+            {QStringLiteral("imageGeometryVersion"), 1},
             {QStringLiteral("x"), element->x()},
             {QStringLiteral("y"), element->y()},
             {QStringLiteral("imagePngBase64"), QString::fromLatin1(image.toBase64())}});
@@ -415,26 +419,27 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
     const auto *project = _Projects.currentProject();
     QPoint result = position;
     if (_Projects.tableEditor().snapToGrid) {
-        const qreal spacing = gridSpacing * project->zoomFactor;
-        const QPointF relative = position - project->gridOrigin;
-        result = (project->gridOrigin
-                  + QPointF(qRound(relative.x() / spacing) * spacing,
-                            qRound(relative.y() / spacing) * spacing)).toPoint();
+        // Align the sleeper/plate body, excluding image padding and connectors.
+        const QPointF offset = movingElement ? movingElement->footprintRect().topLeft() : QPointF();
+        return (LegoGrid::snappedPoint(QPointF(position) + offset,
+                                      project->gridOrigin, project->zoomFactor) - offset).toPoint();
     }
     if (!movingElement) return result;
 
     int closestX = snapDistance + 1;
     int closestY = snapDistance + 1;
-    const int left = position.x();
-    const int top = position.y();
-    const int right = left + movingElement->width();
-    const int bottom = top + movingElement->height();
+    const QRectF movingBounds = movingElement->footprintRect().translated(position);
+    const int left = qRound(movingBounds.left());
+    const int top = qRound(movingBounds.top());
+    const int right = qRound(movingBounds.right());
+    const int bottom = qRound(movingBounds.bottom());
     for (const CityLayoutElement *other : _Projects.cityLayouts()) {
         if (other == movingElement) continue;
-        const int otherLeft = other->x();
-        const int otherTop = other->y();
-        const int otherRight = otherLeft + other->width();
-        const int otherBottom = otherTop + other->height();
+        const QRectF otherBounds = other->footprintRect().translated(other->pos());
+        const int otherLeft = qRound(otherBounds.left());
+        const int otherTop = qRound(otherBounds.top());
+        const int otherRight = qRound(otherBounds.right());
+        const int otherBottom = qRound(otherBounds.bottom());
 
         // Only attract nearby plates; distant edges sharing an axis should not snap.
         if (top <= otherBottom + snapDistance && bottom >= otherTop - snapDistance) {
@@ -443,7 +448,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
                     const int delta = targetEdge - movingEdge;
                     if (qAbs(delta) <= snapDistance && qAbs(delta) < closestX) {
                         closestX = qAbs(delta);
-                        result.setX(left + delta);
+                        result.setX(position.x() + delta);
                     }
                 }
             }
@@ -454,7 +459,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
                     const int delta = targetEdge - movingEdge;
                     if (qAbs(delta) <= snapDistance && qAbs(delta) < closestY) {
                         closestY = qAbs(delta);
-                        result.setY(top + delta);
+                        result.setY(position.y() + delta);
                     }
                 }
             }
@@ -469,6 +474,9 @@ void CityLayoutView::rotateSelectedPlate(int quarterTurns)
     CityLayoutElement *plate = _Projects.cityLayouts().selectedElement();
     if (!plate) return;
     plate->rotateQuarterTurns(quarterTurns);
+    if (_Projects.tableEditor().snapToGrid) {
+        plate->move(snappedPosition(plate->pos(), plate));
+    }
     ++_Projects.currentProject()->changeRevision;
     update();
 }

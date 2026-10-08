@@ -34,6 +34,7 @@ qt_add_executable(LegoCityLayout
     src/TableDefinitionEditorView.h
     src/TableSurface.cpp
     src/TableSurface.h
+    src/LegoGrid.h
     src/LayoutElement.cpp
     src/LayoutElement.h
     src/LayoutElementsView.cpp

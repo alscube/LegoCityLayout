@@ -8,10 +8,11 @@
         <file alias="BasePlate48x48Gray.png">resources/BasePlate48x48Gray.png</file>
         <file alias="TestPlate.png">resources/TestPlate.png</file>
         <file alias="TownHall.png">resources/TownHall.png</file>
+        <file alias="StrightTrack.png">resources/StrightTrack.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="units-IN.svg">resources/icons/units-IN.svg</file>
-        <file alias="units-MM.svg">resources/icons/units-MM.svg</file>
+        <file alias="units-CM.svg">resources/icons/units-CM.svg</file>
         <file alias="units-ST.svg">resources/icons/units-ST.svg</file>
         <file alias="units-PL.svg">resources/icons/units-PL.svg</file>
         <file alias="ruler.svg">resources/icons/ruler.svg</file>

@@ -1,6 +1,7 @@
 
 #include <QtMath>
 #include "UserSettings.h"
+#include "LegoGrid.h"
 #include <QActionGroup>
 #include <QMenu>
 #include <QIcon>
@@ -100,7 +101,7 @@ void ProjectView::AddToolBar( QVBoxLayout *layout )
                         UserSettings::MeasurementSystem::Plates}) {
         QString name;
         switch (system) {
-        case UserSettings::MeasurementSystem::Metric: name = tr("Millimeters"); break;
+        case UserSettings::MeasurementSystem::Metric: name = tr("Centimeters"); break;
         case UserSettings::MeasurementSystem::Studs: name = tr("Studs"); break;
         case UserSettings::MeasurementSystem::Plates: name = tr("Plates"); break;
         default: name = tr("Inches"); break;
@@ -318,9 +319,10 @@ bool ProjectView::saveTableDefinition()
         {QStringLiteral("version"), 1},
         {QStringLiteral("layoutName"), projectTitle},
         {QStringLiteral("coordinateUnits"), QStringLiteral("canvas")},
-        {QStringLiteral("gridSpacing"), 64.0},
-        {QStringLiteral("gridSizeInches"), 10.0},
-        {QStringLiteral("gridSizeCentimeters"), 25.5},
+        {QStringLiteral("gridSpacing"), LegoGrid::plateSpacing},
+        {QStringLiteral("gridSizeInches"), LegoGrid::studPitchMillimeters * LegoGrid::plateStuds / LegoGrid::millimetersPerInch},
+        {QStringLiteral("gridSizeCentimeters"), LegoGrid::studPitchMillimeters * LegoGrid::plateStuds / 10.0},
+        {QStringLiteral("studPitchMillimeters"), LegoGrid::studPitchMillimeters},
         {QStringLiteral("surfaces"), surfaces},
         {QStringLiteral("openSides"), openSides},
         {QStringLiteral("cityLayout"), m_cityLayoutView->savedLayout()}});
@@ -422,7 +424,7 @@ bool ProjectView::openLayout(const QString &path)
         || (root.contains("cityLayout") && (!root.value("cityLayout").isObject()
             || !city.value("elements").isArray())))
         return fail(tr("Invalid city layout."));
-    struct Plate { QString name; QPixmap image; QSize size; QPoint position; int rotation; };
+    struct Plate { QString name; QPixmap image; QSize size; QPoint position; int rotation; int imageGeometryVersion; };
     QList<Plate> plates;
     for (const auto &value : city.value("elements").toArray()) {
         const auto element = value.toObject();
@@ -434,6 +436,7 @@ bool ProjectView::openLayout(const QString &path)
             return fail(tr("Invalid plate position."));
         plate.position = position.toPoint();
         plate.rotation = element.value("rotationDegrees").toInt(-1);
+        plate.imageGeometryVersion = element.value("imageGeometryVersion").toInt(0);
         if (plate.size.width() <= 0 || plate.size.height() <= 0
             || plate.rotation < 0 || plate.rotation >= 360 || plate.rotation % 90 != 0
             || !plate.image.loadFromData(QByteArray::fromBase64(
@@ -451,9 +454,13 @@ bool ProjectView::openLayout(const QString &path)
     project->tableEditor.viewScale = zoom;
     project->gridOrigin = origin;
     for (const auto &plate : plates) {
-        auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, 2.0, zoom, m_cityLayoutView);
+        auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, LegoGrid::pixelsPerStud, zoom, m_cityLayoutView);
         element->rotateQuarterTurns(plate.rotation / 90);
-        element->move(plate.position);
+        // Legacy tracks used the padded canvas as their stud-aligned origin.
+        // Keep that intended origin when adopting the calibrated body bounds.
+        const QPointF artworkOffset = plate.imageGeometryVersion < 1
+            ? element->footprintRect().topLeft() : QPointF();
+        element->move((QPointF(plate.position) - artworkOffset).toPoint());
         project->cityLayouts.append(element);
     }
     setCurrentProjectIndex(index);

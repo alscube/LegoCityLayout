@@ -1,4 +1,5 @@
 #include "UserSettings.h"
+#include "LegoGrid.h"
 
 #include <QCoreApplication>
 
@@ -65,7 +66,7 @@ void UserSettings::setMeasurementSystem(MeasurementSystem system)
 QString UserSettings::measurementAbbreviation() const
 {
     switch (measurementSystem()) {
-    case MeasurementSystem::Metric: return QStringLiteral("MM");
+    case MeasurementSystem::Metric: return QStringLiteral("CM");
     case MeasurementSystem::Studs: return QStringLiteral("ST");
     case MeasurementSystem::Plates: return QStringLiteral("PL");
     default: return QStringLiteral("IN");
@@ -75,7 +76,7 @@ QString UserSettings::measurementAbbreviation() const
 QString UserSettings::measurementName() const
 {
     switch (measurementSystem()) {
-    case MeasurementSystem::Metric: return QCoreApplication::translate("UserSettings", "Millimeters");
+    case MeasurementSystem::Metric: return QCoreApplication::translate("UserSettings", "Centimeters");
     case MeasurementSystem::Studs: return QCoreApplication::translate("UserSettings", "Studs");
     case MeasurementSystem::Plates: return QCoreApplication::translate("UserSettings", "Plates");
     default: return QCoreApplication::translate("UserSettings", "Inches");
@@ -84,11 +85,10 @@ QString UserSettings::measurementName() const
 
 double UserSettings::measurementUnitsPerInch() const
 {
-    // Preserve the layout's nominal baseplate scale: 10 in = 255 mm = 32 studs = 1 plate.
     switch (measurementSystem()) {
-    case MeasurementSystem::Metric: return 25.5;
-    case MeasurementSystem::Studs: return 3.2;
-    case MeasurementSystem::Plates: return 0.1;
+    case MeasurementSystem::Metric: return LegoGrid::millimetersPerInch / 10.0;
+    case MeasurementSystem::Studs: return LegoGrid::millimetersPerInch / LegoGrid::studPitchMillimeters;
+    case MeasurementSystem::Plates: return LegoGrid::millimetersPerInch / (LegoGrid::studPitchMillimeters * LegoGrid::plateStuds);
     default: return 1.0;
     }
 }

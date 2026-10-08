@@ -7,10 +7,14 @@
 
 class QMouseEvent;
 
-// Plates
-//       Each stud measures 8 mm or 0.8 cm center to center
+// Studs
+//       Each stud has a diameter of 4.8 mm
+//       Height of roughly 1.7 mm
+//       Space between studs 3.2 MM
+//       Each stud measures 8 mm center to center
 
-//       Equivalent to 1/3 of a standard LEGO plate (~0.32 cm / 0.1 in.)
+// Plates
+//       Plate Height, equivalent to 1/3 of a standard LEGO plate (~0.32 cm / 0.1 in.)
 //
 // 8x16 - 128 studs
 //      ~ 2.5x5 (or 2.6 in. x 5.1 in.)
@@ -29,8 +33,8 @@ class QMouseEvent;
 //       ~33x33 (33.6 cm × 33.6 cm)
 
 // Track (stright)
-// Length: 16 studs (128 mm / ~5 inches)
-// Width: 8 studs (64 mm / ~2.5 inches across the plastic ties/sleepers)
+//       Length: 16 studs (128 mm / ~5 inches)
+//       Width: 8 studs (64 mm / ~2.5 inches across the plastic ties/sleepers)
 
 
 class LayoutElement final : public QWidget

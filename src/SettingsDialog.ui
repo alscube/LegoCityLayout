@@ -38,7 +38,7 @@
        </item>
        <item>
         <property name="text">
-         <string>Metric (millimeters)</string>
+         <string>Metric (centimeters)</string>
         </property>
        </item>
        <item>

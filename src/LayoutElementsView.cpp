@@ -35,7 +35,13 @@ void LayoutElementsView::addLayoutElements()
         QSize(32, 32), buildingsPage), 0, Qt::AlignHCenter);
     buildingsLayout->addStretch();
     tabs->addTab(buildingsPage, tr("Buildings"));
-    tabs->addTab(new QWidget(tabs), tr("Tracks"));
+    auto *tracksPage = new QWidget(tabs);
+    auto *tracksLayout = new QVBoxLayout(tracksPage);
+    tracksLayout->addWidget(new LayoutElement(
+        tr("Straight Track"), QStringLiteral(":/images/StrightTrack.png"),
+        QSize(8, 16), tracksPage), 0, Qt::AlignHCenter);
+    tracksLayout->addStretch();
+    tabs->addTab(tracksPage, tr("Tracks"));
 
     const LayoutElementsList elementsList(platesPage);
 

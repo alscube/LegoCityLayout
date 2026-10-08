@@ -7,6 +7,7 @@
 #include "CityLayoutElement.h"
 #include "LoadedProjects.h"
 #include "UserSettings.h"
+#include "LegoGrid.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -30,9 +31,8 @@
 #include <cmath>
 
 namespace {
-constexpr qreal gridSizeInches = 10.0;
-constexpr qreal gridSpacing = 64.0;
-constexpr qreal pixelsPerInch = gridSpacing / gridSizeInches;
+constexpr qreal gridSpacing = LegoGrid::plateSpacing;
+constexpr qreal pixelsPerInch = LegoGrid::pixelsPerInch;
 constexpr qreal closePointDistance = 14.0;
 constexpr qreal endpointSelectionDistance = 7.0;
 constexpr qreal sideSelectionDistance = 12.0;
@@ -351,6 +351,7 @@ QPointF TableDefinitionEditorView::snappedPoint(const QPointF &point) const
         return point;
     }
 
+    // Table outlines snap to the visible baseplate grid; city elements snap to studs.
     const qreal spacing = gridSpacing * _Projects.tableEditor().viewScale;
     const QPointF origin = _Projects.currentProject()->gridOrigin;
     const QPointF relative = point - origin;
@@ -869,7 +870,13 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
     if (!_Projects.tableDefinition().isEmpty()) {
         painter.setPen(QPen(QColor(80, 55, 30), 3));
         painter.setBrush(QColor(181, 143, 92, 120));
-        painter.drawPath(_Projects.tableDefinition().usableArea());
+        const QPainterPath surface = _Projects.tableDefinition().usableArea();
+        painter.drawPath(surface);
+        if (_Projects.tableEditor().gridVisible) {
+            LegoGrid::paintStuds(painter, surface, rect(),
+                                 _Projects.currentProject()->gridOrigin,
+                                 _Projects.tableEditor().viewScale);
+        }
 
         painter.setPen(editingMeasurementColor);
         for (const TableSurface &surface : _Projects.tableDefinition().surfaces()) {
