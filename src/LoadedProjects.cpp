@@ -86,7 +86,7 @@ void LoadedProjects::setViewZoom(const QPointF &anchor, qreal zoomFactor)
 {
     ProjectData *project = currentProject();
     if (!project) return;
-    const qreal newZoom = qBound(0.25, zoomFactor, 4.0);
+    const qreal newZoom = qBound(0.25, zoomFactor, 24.0);
     const qreal relativeScale = newZoom / project->zoomFactor;
     project->tableEditor.viewScale = newZoom;
     if (qFuzzyCompare(newZoom, project->zoomFactor)) return;

@@ -18,6 +18,7 @@ public:
     QString name() const;
     QSize plateSize() const { return m_plateSize; }
     void setZoomFactor(qreal zoomFactor);
+    QPixmap savedPixmap() const;
     void rotateQuarterTurns(int turns);
     int rotationDegrees() const { return m_quarterTurns * 90; }
 

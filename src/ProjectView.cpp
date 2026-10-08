@@ -20,6 +20,9 @@
 #include <QMainWindow>
 #include <QDir>
 #include <QFileDialog>
+#include <QFile>
+#include <QTransform>
+#include <cmath>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -142,6 +145,7 @@ void ProjectView::AddToolBar( QVBoxLayout *layout )
 
     layout->addWidget(m_toolbar);
 }
+
 
 void ProjectView::AddViews( QVBoxLayout *layout )
 {
@@ -331,10 +335,132 @@ bool ProjectView::saveTableDefinition()
     _Projects.currentProject()->savedTableState = tableState();
     _Projects.currentProject()->savedLayoutRevision = m_cityLayoutView->changeRevision();
     settings.setValue(QStringLiteral("tableDefinition/saveDirectory"), directory);
+    settings.setValue(QStringLiteral("layout/lastPath"), QFileInfo(path).absoluteFilePath());
     if (auto *mainWindow = qobject_cast<QMainWindow *>(window())) {
         mainWindow->statusBar()->showMessage(
             tr("Table definition saved to %1").arg(QDir::toNativeSeparators(path)), 5000);
     }
+    return true;
+}
+
+
+void ProjectView::promptToOpenLayout()
+{
+    QSettings settings;
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Open Layout"),
+        settings.value(QStringLiteral("layout/lastPath"),
+                       QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString(),
+        tr("Lego Layouts (*.table.json);;JSON Files (*.json)"));
+    if (!path.isEmpty()) openLayout(path);
+}
+
+void ProjectView::openLastLayout()
+{
+    const QString path = QSettings().value(QStringLiteral("layout/lastPath")).toString();
+    if (path.isEmpty()) {
+        QMessageBox::information(this, tr("Open Last Layout"), tr("Open or save a layout first."));
+        return;
+    }
+    openLayout(path);
+}
+
+bool ProjectView::openLayout(const QString &path)
+{
+    const auto fail = [this, &path](const QString &reason) {
+        QMessageBox::critical(this, tr("Could Not Open Layout"),
+                              tr("Could not open %1:\n%2").arg(QDir::toNativeSeparators(path), reason));
+        return false;
+    };
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return fail(file.errorString());
+    QJsonParseError error;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
+    if (error.error != QJsonParseError::NoError) return fail(error.errorString());
+    const QJsonObject root = document.object();
+    if (root.value("format").toString() != QStringLiteral("LegoCityLayout.TableDefinition")
+        || root.value("version").toInt() != 1
+        || root.value("layoutName").toString().trimmed().isEmpty()
+        || !root.value("surfaces").isArray() || !root.value("openSides").isArray())
+        return fail(tr("Unsupported or invalid layout file."));
+
+    const auto readPoint = [](const QJsonValue &value, QPointF &point) {
+        const auto object = value.toObject();
+        if (!object.value("x").isDouble() || !object.value("y").isDouble()) return false;
+        point = QPointF(object.value("x").toDouble(), object.value("y").toDouble());
+        return std::isfinite(point.x()) && std::isfinite(point.y());
+    };
+    TableDefinition table;
+    for (const auto &value : root.value("surfaces").toArray()) {
+        const auto surface = value.toObject();
+        if (!surface.value("outline").isArray()) return fail(tr("Invalid table outline."));
+        QPolygonF outline;
+        for (const auto &vertex : surface.value("outline").toArray()) {
+            QPointF point;
+            if (!readPoint(vertex, point)) return fail(tr("Invalid table coordinates."));
+            outline.append(point);
+        }
+        if (!table.addSurface(TableSurface(surface.value("name").toString(), outline)))
+            return fail(tr("Invalid table surface."));
+    }
+    QList<QLineF> sides;
+    for (const auto &value : root.value("openSides").toArray()) {
+        QPointF start, end;
+        if (!readPoint(value.toObject().value("start"), start)
+            || !readPoint(value.toObject().value("end"), end))
+            return fail(tr("Invalid table side."));
+        sides.append(QLineF(start, end));
+    }
+    table.setOpenSides(sides);
+
+    // Older table files have no cityLayout section.
+    const auto city = root.value("cityLayout").toObject();
+    const double zoom = city.value("zoomFactor").toDouble(1.875);
+    const QPointF origin(city.value("gridOriginX").toDouble(), city.value("gridOriginY").toDouble());
+    if (!std::isfinite(zoom) || zoom < 0.25 || zoom > 24.0
+        || !std::isfinite(origin.x()) || !std::isfinite(origin.y())
+        || (root.contains("cityLayout") && (!root.value("cityLayout").isObject()
+            || !city.value("elements").isArray())))
+        return fail(tr("Invalid city layout."));
+    struct Plate { QString name; QPixmap image; QSize size; QPoint position; int rotation; };
+    QList<Plate> plates;
+    for (const auto &value : city.value("elements").toArray()) {
+        const auto element = value.toObject();
+        Plate plate;
+        plate.name = element.value("name").toString();
+        plate.size = QSize(element.value("widthStuds").toInt(), element.value("heightStuds").toInt());
+        QPointF position;
+        if (!readPoint(value, position) || qAbs(position.x()) > 10000000 || qAbs(position.y()) > 10000000)
+            return fail(tr("Invalid plate position."));
+        plate.position = position.toPoint();
+        plate.rotation = element.value("rotationDegrees").toInt(-1);
+        if (plate.size.width() <= 0 || plate.size.height() <= 0
+            || plate.rotation < 0 || plate.rotation >= 360 || plate.rotation % 90 != 0
+            || !plate.image.loadFromData(QByteArray::fromBase64(
+                element.value("imagePngBase64").toString().toLatin1()), "PNG"))
+            return fail(tr("Invalid city plate."));
+        // Saved PNGs already include the plate's rotation.
+        plate.image = plate.image.transformed(QTransform().rotate(-plate.rotation));
+        plates.append(plate);
+    }
+
+    const int index = _Projects.addProject(root.value("layoutName").toString());
+    auto *project = _Projects.project(index);
+    project->tableDefinition = table;
+    project->zoomFactor = zoom;
+    project->tableEditor.viewScale = zoom;
+    project->gridOrigin = origin;
+    for (const auto &plate : plates) {
+        auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, 2.0, zoom, m_cityLayoutView);
+        element->rotateQuarterTurns(plate.rotation / 90);
+        element->move(plate.position);
+        project->cityLayouts.append(element);
+    }
+    setCurrentProjectIndex(index);
+    project->savedTableState = tableState();
+    project->savedLayoutRevision = m_cityLayoutView->changeRevision();
+    QSettings settings;
+    settings.setValue(QStringLiteral("layout/lastPath"), QFileInfo(path).absoluteFilePath());
     return true;
 }
 

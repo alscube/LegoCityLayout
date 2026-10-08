@@ -26,6 +26,9 @@ public:
     void defineTableOutline();
     void showCityLayout();
     bool saveTableDefinition();
+    void promptToOpenLayout();
+    void openLastLayout();
+    bool openLayout(const QString &path);
 
     void closeProject();
 

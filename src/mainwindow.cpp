@@ -57,6 +57,12 @@ void MainWindow::SetupMainMenu( )
     connect(newProjectAction, &QAction::triggered,
             _projectView, &ProjectView::promptToCreateProject);
 
+    auto *openAction = fileMenu->addAction(tr("&Open Layout..."));
+    openAction->setShortcut(QKeySequence::Open);
+    connect(openAction, &QAction::triggered, _projectView, &ProjectView::promptToOpenLayout);
+    auto *openLastAction = fileMenu->addAction(tr("Open &Last Layout"));
+    connect(openLastAction, &QAction::triggered, _projectView, &ProjectView::openLastLayout);
+
     fileMenu->addSeparator();
     QAction *closeProjectAction = fileMenu->addAction(tr("&Close"));
     closeProjectAction->setShortcut(QKeySequence::Close);
@@ -102,13 +108,10 @@ void MainWindow::SetupMainMenu( )
     connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
 
     connect(_projectView, &ProjectView::openLayoutRequested,
-            this, [this] {
-                statusBar()->showMessage(tr("Opening layouts is not available yet"), 3000);
-            });
+            _projectView, &ProjectView::promptToOpenLayout);
     connect(_projectView, &ProjectView::openLastLayoutRequested,
-            this, [this] {
-                statusBar()->showMessage(tr("There is no saved layout to open yet"), 3000);
-            });
+            _projectView, &ProjectView::openLastLayout);
+
 }
 
 

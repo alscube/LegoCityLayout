@@ -36,6 +36,11 @@ LayoutElement::LayoutElement(const QString &name,
     image->setAlignment(Qt::AlignCenter);
     QPixmap elementImage(resourcePath);
 //    QSize imageSize = elementImage.size();
+    // Keep large source assets from expanding the palette beyond the window.
+    if (elementImage.width() > 160 || elementImage.height() > 160) {
+        elementImage = elementImage.scaled(
+            QSize(160, 160), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
     image->setPixmap(elementImage);
 
     // image->setPixmap(QPixmap(resourcePath).scaled(

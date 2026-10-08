@@ -31,7 +31,7 @@ constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
 constexpr auto layoutElementNameMimeType = "application/x-legocity-layout-element-name";
 constexpr auto layoutElementSizeMimeType = "application/x-legocity-layout-element-size";
 constexpr qreal minimumZoom = 0.25;
-constexpr qreal maximumZoom = 4.0;
+constexpr qreal maximumZoom = 24.0;
 constexpr int snapDistance = 6;
 constexpr qreal pixelsPerInch = 12.8;
 constexpr qreal gridSizeInches = 10.0;
@@ -385,7 +385,7 @@ QJsonObject CityLayoutView::savedLayout() const
         QByteArray image;
         QBuffer buffer(&image);
         buffer.open(QIODevice::WriteOnly);
-        element->pixmap().save(&buffer, "PNG");
+        element->savedPixmap().save(&buffer, "PNG");
         elements.append(QJsonObject{
             {QStringLiteral("name"), element->name()},
             {QStringLiteral("widthStuds"), element->plateSize().width()},

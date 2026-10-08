@@ -33,12 +33,20 @@ void CityLayoutElement::setZoomFactor(qreal zoomFactor)
     if (m_quarterTurns % 2) rotatedSize.transpose();
     const QSize size(qMax(1, qRound(rotatedSize.width() * zoomFactor)),
                      qMax(1, qRound(rotatedSize.height() * zoomFactor)));
-    const QPixmap rotatedPixmap = m_originalPixmap.transformed(
-        QTransform().rotate(rotationDegrees()), Qt::SmoothTransformation);
-    const QPixmap displayedPixmap = rotatedPixmap.scaled(
-        size, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const qreal pixelRatio = devicePixelRatioF();
+    QPixmap displayedPixmap = savedPixmap().scaled(
+        QSize(qRound(size.width() * pixelRatio), qRound(size.height() * pixelRatio)),
+        Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    displayedPixmap.setDevicePixelRatio(pixelRatio);
     setPixmap(displayedPixmap);
-    setFixedSize(displayedPixmap.size());
+    setFixedSize(size);
+}
+
+QPixmap CityLayoutElement::savedPixmap() const
+{
+    // Save full source detail in the same orientation as the displayed plate.
+    return m_originalPixmap.transformed(
+        QTransform().rotate(rotationDegrees()), Qt::SmoothTransformation);
 }
 
 void CityLayoutElement::rotateQuarterTurns(int turns)

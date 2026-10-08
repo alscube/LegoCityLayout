@@ -7,6 +7,7 @@
         <file alias="BasePlate32x32White.png">resources/BasePlate32x32White.png</file>
         <file alias="BasePlate48x48Gray.png">resources/BasePlate48x48Gray.png</file>
         <file alias="TestPlate.png">resources/TestPlate.png</file>
+        <file alias="TownHall.png">resources/TownHall.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="units-IN.svg">resources/icons/units-IN.svg</file>
