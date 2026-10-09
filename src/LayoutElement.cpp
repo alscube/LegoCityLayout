@@ -1,5 +1,6 @@
 
 #include "LayoutElement.h"
+#include "CityLayoutElement.h"
 
 #include <QApplication>
 #include <QDrag>
@@ -16,6 +17,18 @@ constexpr auto layoutElementMimeType = "application/x-legocity-layout-element";
 constexpr auto layoutElementNameMimeType = "application/x-legocity-layout-element-name";
 constexpr auto layoutElementSizeMimeType = "application/x-legocity-layout-element-size";
 constexpr int dragThumbnailSize = 120;
+
+QPixmap previewPixmap(const QString &resourcePath, const QSize &plateSize)
+{
+    const QPixmap source(resourcePath);
+    if (plateSize == QSize(17, 11) || plateSize == QSize(8, 16)) {
+        CityLayoutElement preview(QString(), source, plateSize, 8.0);
+        QPixmap artwork = preview.pixmap();
+        artwork.setDevicePixelRatio(1.0);
+        return artwork;
+    }
+    return source;
+}
 }
 
 LayoutElement::LayoutElement(const QString &name,
@@ -34,7 +47,7 @@ LayoutElement::LayoutElement(const QString &name,
     auto *image = new QLabel(this);
     image->setAttribute(Qt::WA_TransparentForMouseEvents);
     image->setAlignment(Qt::AlignCenter);
-    QPixmap elementImage(resourcePath);
+    QPixmap elementImage = previewPixmap(resourcePath, plateSize);
 //    QSize imageSize = elementImage.size();
     // Keep large source assets from expanding the palette beyond the window.
     if (elementImage.width() > 160 || elementImage.height() > 160) {
@@ -82,7 +95,7 @@ void LayoutElement::mouseMoveEvent(QMouseEvent *event)
     auto *drag = new QDrag(this);
     drag->setMimeData(mimeData);
 
-    const QPixmap sourcePixmap(m_resourcePath);
+    const QPixmap sourcePixmap = previewPixmap(m_resourcePath, m_plateSize);
     if (!sourcePixmap.isNull()) {
         const QPixmap thumbnail = sourcePixmap.scaled(
             QSize(dragThumbnailSize, dragThumbnailSize),

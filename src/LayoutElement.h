@@ -36,6 +36,12 @@ class QMouseEvent;
 //       Length: 16 studs (128 mm / ~5 inches)
 //       Width: 8 studs (64 mm / ~2.5 inches across the plastic ties/sleepers)
 
+// Track (Curved)
+//       Length: 16 studs (128 mm / ~5 inches) - on center line
+//       Radius: 40 studs (measured from the center of the track).
+//       Angle:  22.5° per piece (16 pieces make a full 360° circle;
+//               4 pieces make a 90° quarter-turn)
+
 
 class LayoutElement final : public QWidget
 {

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QLabel>
+#include <QLineF>
+#include <QList>
 #include <QPixmap>
+#include <QTransform>
 #include <QString>
 #include <QSizeF>
 
@@ -22,7 +25,13 @@ public:
     // Stud-aligned body bounds, excluding artwork margins and connector overhangs.
     QRectF footprintRect() const;
     void rotateQuarterTurns(int turns);
-    int rotationDegrees() const { return m_quarterTurns * 90; }
+    // Tracks turn in 22.5-degree steps; other elements use quarter turns.
+    qreal rotationStepDegrees() const;
+    void rotateSteps(int steps);
+    void rotateByDegrees(qreal degrees);
+    qreal rotationDegrees() const { return m_rotationDegrees; }
+    QPixmap sourcePixmap() const { return m_originalPixmap; }
+    QList<QLineF> trackConnections() const;
 
 private:
     QString m_name;
@@ -32,5 +41,9 @@ private:
     QRect m_sourceBounds;
     QRectF m_unscaledFootprint;
     qreal m_zoomFactor = 1.0;
-    int m_quarterTurns = 0;
+    qreal m_rotationDegrees = 0.0;
+    bool m_isCurvedTrack = false;
+    bool m_isStraightTrack = false;
+    QTransform m_curveArtworkTransform;
+    QPointF displayedPoint(const QPointF &point) const;
 };

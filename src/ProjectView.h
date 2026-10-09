@@ -6,6 +6,7 @@ class QVBoxLayout;
 class QStackedWidget;
 class QToolBar;
 class QAction;
+class QLabel;
 
 class LoadedProjects;
 class CityLayoutView;
@@ -49,6 +50,8 @@ private:
     QByteArray tableState();
     void initializeNewProject(const QString &title);
 
+    QWidget *m_cityLayoutHeader = nullptr;
+    QLabel *m_cityLayoutTitle = nullptr;
     QStackedWidget *m_views = nullptr;
     QToolBar *m_toolbar = nullptr;
     QAction *m_tableViewAction = nullptr;

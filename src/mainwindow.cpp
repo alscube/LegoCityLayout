@@ -64,12 +64,12 @@ void MainWindow::SetupMainMenu( )
     connect(openLastAction, &QAction::triggered, _projectView, &ProjectView::openLastLayout);
 
     fileMenu->addSeparator();
-    QAction *closeProjectAction = fileMenu->addAction(tr("&Close"));
+    QAction *closeProjectAction = fileMenu->addAction(tr("&Close Layout..."));
     closeProjectAction->setShortcut(QKeySequence::Close);
     connect(closeProjectAction, &QAction::triggered,
             _projectView, &ProjectView::closeProject);
 
-    QAction *saveTableAction = fileMenu->addAction(tr("&Save Lego Layout..."));
+    QAction *saveTableAction = fileMenu->addAction(tr("&Save Layout..."));
     saveTableAction->setShortcut(QKeySequence::Save);
     connect(saveTableAction, &QAction::triggered,
             _projectView, &ProjectView::saveTableDefinition);

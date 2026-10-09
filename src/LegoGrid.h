@@ -14,6 +14,9 @@ inline constexpr qreal pixelsPerInch = 6.4;
 inline constexpr qreal pixelsPerStud = pixelsPerInch * studPitchMillimeters / millimetersPerInch;
 inline constexpr qreal plateStuds = 32.0;
 inline constexpr qreal plateSpacing = plateStuds * pixelsPerStud;
+inline constexpr qreal curveArcStuds = 16.0;
+inline constexpr qreal curveSweepDegrees = 22.5;
+inline constexpr qreal curveRadiusStuds = curveArcStuds / (3.14159265358979323846 / 8.0);
 
 inline QPointF snappedPoint(const QPointF &point, const QPointF &origin, qreal zoom)
 {
@@ -41,7 +44,15 @@ inline void paintStuds(QPainter &painter, const QPainterPath &surface,
     painter.setBrush(QColor(255, 255, 255, 35));
     for (qreal y = firstY; y <= bounds.bottom(); y += spacing) {
         for (qreal x = firstX; x <= bounds.right(); x += spacing) {
-            painter.drawEllipse(QPointF(x, y), radius, radius);
+            // A table boundary may fall between stud cells in an existing layout.
+            // Leave room for the 3-pixel table outline and the stud's own stroke;
+            // paint complete studs rather than clipped fragments at edges/holes.
+            constexpr qreal outlineClearance = 1.5 + 0.75 / 2.0;
+            const qreal extent = radius + outlineClearance;
+            const QRectF studBounds(x - extent, y - extent, 2 * extent, 2 * extent);
+            if (surface.contains(studBounds)) {
+                painter.drawEllipse(QPointF(x, y), radius, radius);
+            }
         }
     }
     painter.restore();

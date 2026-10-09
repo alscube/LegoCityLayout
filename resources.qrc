@@ -9,6 +9,7 @@
         <file alias="TestPlate.png">resources/TestPlate.png</file>
         <file alias="TownHall.png">resources/TownHall.png</file>
         <file alias="StrightTrack.png">resources/StrightTrack.png</file>
+        <file alias="CurvedTrack.png">resources/CurvedTrack.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="units-IN.svg">resources/icons/units-IN.svg</file>

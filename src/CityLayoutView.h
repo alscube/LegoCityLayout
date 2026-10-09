@@ -52,7 +52,8 @@ protected:
 
 private:
     void panBy(const QPoint &offset);
-    void rotateSelectedPlate(int quarterTurns);
+    void rotateSelectedPlate(int steps);
+    void rotateSelectedPlateByDegrees(qreal degrees);
 
     LoadedProjects &_Projects;
     QPoint m_dragOffset;

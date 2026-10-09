@@ -28,6 +28,8 @@ public:
     void updateElementHighLite(CityLayoutElement* element);
 
     bool deleteSelectedElement( );
+    bool bringSelectedToFront();
+    bool sendSelectedToBack();
 
     bool wasElementClicked( CityLayoutView* view, const QPoint position );
 

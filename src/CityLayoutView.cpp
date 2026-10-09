@@ -15,14 +15,12 @@
 #include <QDropEvent>
 #include <QEvent>
 #include <QKeyEvent>
-#include <QLabel>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
 #include <QWheelEvent>
-#include <QVBoxLayout>
 
 #include <cmath>
 
@@ -48,18 +46,7 @@ CityLayoutView::CityLayoutView(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
 
-    auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
 
-    auto *titleLabel = new QLabel(tr("City Layout"), this);
-    titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    titleLabel->setContentsMargins(14, 10, 14, 10);
-    titleLabel->setStyleSheet(
-        "QLabel { background-color: palette(window); "
-        "font-size: 22px; font-weight: 700; }");
-    layout->addWidget(titleLabel);
-    layout->addStretch();
 }
 
 
@@ -213,7 +200,7 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
     {
         if ( _Projects.cityLayouts().elementDragged( this, m_mouseDragged) )
         {
-            ++_Projects.currentProject()->changeRevision;
+            if (m_mouseDragged) ++_Projects.currentProject()->changeRevision;
             m_mouseDragged = false;
             unsetCursor();
             event->accept();
@@ -298,8 +285,11 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
 {
     QWidget::paintEvent(event);
 
-    if (!_Projects.currentProject()) return;
     QPainter painter(this);
+    // Clear exposed areas when child elements shrink or move during zoom/pan.
+    // The grid and translucent table fill do not repaint the entire background.
+    painter.fillRect(rect(), palette().brush(QPalette::Window));
+    if (!_Projects.currentProject()) return;
     if (_Projects.tableEditor().gridVisible && !LoadedProjects::instance().title().isEmpty()) {
         painter.setRenderHint(QPainter::Antialiasing, false);
         painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
@@ -351,8 +341,20 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     _Projects.cityLayouts().setSelectedElement(layoutElement);
 
     QMenu menu(this);
-    QAction *clockwiseAction = menu.addAction(tr("Rotate Clockwise (R)"));
-    QAction *counterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise (Shift+R)"));
+    const QString stepAngle = QString::number(layoutElement->rotationStepDegrees());
+    QAction *clockwiseAction = menu.addAction(tr("Rotate Clockwise %1° (R)").arg(stepAngle));
+    QAction *counterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise %1° (Shift+R)").arg(stepAngle));
+    QAction *quarterClockwiseAction = nullptr;
+    QAction *quarterCounterclockwiseAction = nullptr;
+    if (!qFuzzyCompare(layoutElement->rotationStepDegrees(), 90.0)) {
+        quarterClockwiseAction = menu.addAction(tr("Rotate Clockwise 90°"));
+        quarterCounterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise 90°"));
+    }
+    menu.addSeparator();
+    QAction *frontAction = menu.addAction(tr("Bring to Front"));
+    QAction *backAction = menu.addAction(tr("Send to Back"));
+    frontAction->setEnabled(_Projects.cityLayouts().last() != layoutElement);
+    backAction->setEnabled(_Projects.cityLayouts().first() != layoutElement);
     menu.addSeparator();
     QAction *deleteAction = menu.addAction(tr("Delete"));
     QAction *chosenAction = menu.exec(event->globalPos());
@@ -360,6 +362,18 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
         rotateSelectedPlate(1);
     } else if (chosenAction == counterclockwiseAction) {
         rotateSelectedPlate(-1);
+    } else if (quarterClockwiseAction && chosenAction == quarterClockwiseAction) {
+        rotateSelectedPlateByDegrees(90.0);
+    } else if (quarterCounterclockwiseAction && chosenAction == quarterCounterclockwiseAction) {
+        rotateSelectedPlateByDegrees(-90.0);
+    } else if (chosenAction == frontAction) {
+        if (_Projects.cityLayouts().bringSelectedToFront()) {
+            ++_Projects.currentProject()->changeRevision;
+        }
+    } else if (chosenAction == backAction) {
+        if (_Projects.cityLayouts().sendSelectedToBack()) {
+            ++_Projects.currentProject()->changeRevision;
+        }
     } else if (chosenAction == deleteAction) {
         if (_Projects.cityLayouts().deleteSelectedElement()) {
             ++_Projects.currentProject()->changeRevision;
@@ -388,13 +402,14 @@ QJsonObject CityLayoutView::savedLayout() const
         QByteArray image;
         QBuffer buffer(&image);
         buffer.open(QIODevice::WriteOnly);
-        element->savedPixmap().save(&buffer, "PNG");
+        element->sourcePixmap().save(&buffer, "PNG");
         elements.append(QJsonObject{
             {QStringLiteral("name"), element->name()},
             {QStringLiteral("widthStuds"), element->plateSize().width()},
             {QStringLiteral("heightStuds"), element->plateSize().height()},
             {QStringLiteral("rotationDegrees"), element->rotationDegrees()},
-            {QStringLiteral("imageGeometryVersion"), 1},
+            {QStringLiteral("imageGeometryVersion"), 2},
+            {QStringLiteral("imageIsUnrotated"), true},
             {QStringLiteral("x"), element->x()},
             {QStringLiteral("y"), element->y()},
             {QStringLiteral("imagePngBase64"), QString::fromLatin1(image.toBase64())}});
@@ -418,6 +433,40 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
     if (!_Projects.currentProject()) return position;
     const auto *project = _Projects.currentProject();
     QPoint result = position;
+    // Compatible rail ends take precedence over the underlying stud lattice.
+    if (movingElement) {
+        qreal nearest = snapDistance + 0.01;
+        QPointF connectionOffset;
+        bool foundConnection = false;
+        for (const QLineF &moving : movingElement->trackConnections()) {
+            if (qFuzzyIsNull(moving.length())) continue;
+            const QPointF movingDirection = (moving.p2() - moving.p1()) / moving.length();
+            for (const CityLayoutElement *other : _Projects.cityLayouts()) {
+                if (other == movingElement) continue;
+                for (const QLineF &target : other->trackConnections()) {
+                    if (qFuzzyIsNull(target.length())) continue;
+                    const QPointF targetDirection = (target.p2() - target.p1()) / target.length();
+                    const qreal dot = QPointF::dotProduct(movingDirection, targetDirection);
+                    if (dot > -0.996) continue;
+                    const QPointF offset = QPointF(other->pos()) + target.p1()
+                        - (QPointF(position) + moving.p1());
+                    const qreal distance = QLineF(QPointF(), offset).length();
+                    if (distance < nearest) {
+                        nearest = distance;
+                        connectionOffset = offset;
+                        foundConnection = true;
+                    }
+                }
+            }
+        }
+        if (foundConnection) return (QPointF(position) + connectionOffset).toPoint();
+    }
+    // A diagonal straight track cannot align its sleeper body to the stud lattice.
+    // Keep rail-end snapping above, then let unmatched diagonal tracks float.
+    if (movingElement && movingElement->plateSize() == QSize(8, 16)
+        && qAbs(std::remainder(movingElement->rotationDegrees(), 90.0)) > 1e-6) {
+        return position;
+    }
     if (_Projects.tableEditor().snapToGrid) {
         // Align the sleeper/plate body, excluding image padding and connectors.
         const QPointF offset = movingElement ? movingElement->footprintRect().topLeft() : QPointF();
@@ -468,13 +517,21 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
     return result;
 }
 
-void CityLayoutView::rotateSelectedPlate(int quarterTurns)
+void CityLayoutView::rotateSelectedPlate(int steps)
 {
     if (!_Projects.currentProject()) return;
     CityLayoutElement *plate = _Projects.cityLayouts().selectedElement();
     if (!plate) return;
-    plate->rotateQuarterTurns(quarterTurns);
-    if (_Projects.tableEditor().snapToGrid) {
+    rotateSelectedPlateByDegrees(steps * plate->rotationStepDegrees());
+}
+
+void CityLayoutView::rotateSelectedPlateByDegrees(qreal degrees)
+{
+    if (!_Projects.currentProject()) return;
+    CityLayoutElement *plate = _Projects.cityLayouts().selectedElement();
+    if (!plate) return;
+    plate->rotateByDegrees(degrees);
+    if (_Projects.tableEditor().snapToGrid || !plate->trackConnections().isEmpty()) {
         plate->move(snappedPosition(plate->pos(), plate));
     }
     ++_Projects.currentProject()->changeRevision;

@@ -85,6 +85,26 @@ bool CityLayoutElements::deleteSelectedElement( )
 }
 
 
+bool CityLayoutElements::bringSelectedToFront()
+{
+    CityLayoutElement *element = selectedElement();
+    if (!element || !contains(element) || last() == element) return false;
+    removeAll(element);
+    append(element);
+    element->raise();
+    return true;
+}
+
+bool CityLayoutElements::sendSelectedToBack()
+{
+    CityLayoutElement *element = selectedElement();
+    if (!element || !contains(element) || first() == element) return false;
+    removeAll(element);
+    prepend(element);
+    element->lower();
+    return true;
+}
+
 CityLayoutElement *CityLayoutElements::draggedElement() const
 {
     return _DraggedElement;
@@ -154,9 +174,6 @@ bool CityLayoutElements::elementDragged( QWidget *view, bool mouseDragged )
     if (!mouseDragged) {
         view->setFocus(Qt::MouseFocusReason);
         setSelectedElement(element);
-        removeAll(element);
-        append(element);
-        element->raise();
     }
 
     setDraggedElement(nullptr);

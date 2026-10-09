@@ -40,6 +40,9 @@ void LayoutElementsView::addLayoutElements()
     tracksLayout->addWidget(new LayoutElement(
         tr("Straight Track"), QStringLiteral(":/images/StrightTrack.png"),
         QSize(8, 16), tracksPage), 0, Qt::AlignHCenter);
+    tracksLayout->addWidget(new LayoutElement(
+        tr("Curved Track (22.5°)"), QStringLiteral(":/images/CurvedTrack.png"),
+        QSize(17, 11), tracksPage), 0, Qt::AlignHCenter);
     tracksLayout->addStretch();
     tabs->addTab(tracksPage, tr("Tracks"));
 
