@@ -38,8 +38,11 @@ constexpr int dragThumbnailSize = 120;
 QPixmap previewPixmap(const QString &resourcePath, const QSize &plateSize)
 {
     const QPixmap source(resourcePath);
-    if (plateSize == QSize(17, 11) || plateSize == QSize(8, 16)) {
-        CityLayoutElement preview(QString(), source, plateSize, 8.0);
+    if (resourcePath == QStringLiteral(":/images/CurvedTrack.png")
+        || resourcePath == QStringLiteral(":/images/StrightTrack.png")
+        || resourcePath == QStringLiteral(":/images/LeftSwitchTrack.png")
+        || resourcePath == QStringLiteral(":/images/RightSwitchTrack.png")) {
+        CityLayoutElement preview(QString(), source, plateSize, 8.0, 1.0, nullptr, resourcePath);
         QPixmap artwork = preview.pixmap();
         artwork.setDevicePixelRatio(1.0);
         return artwork;

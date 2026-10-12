@@ -105,7 +105,7 @@ void CityLayoutView::dropEvent(QDropEvent *event)
 
     auto *layoutElement = new CityLayoutElement(
         name, pixmap, plateSize, pixelsPerStud,
-        _Projects.currentProject()->zoomFactor, this);
+        _Projects.currentProject()->zoomFactor, this, resourcePath);
 
     const QPoint requestedPosition = event->position().toPoint()
                                      - QPoint(layoutElement->width() / 2,
@@ -358,26 +358,42 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     _Projects.cityLayouts().setSelectedElement(layoutElement);
 
     QMenu menu(this);
-    const QString stepAngle = QString::number(layoutElement->rotationStepDegrees());
+    const bool isStraightTrack = layoutElement->isStraightTrack();
+    qreal stepDegrees = layoutElement->rotationStepDegrees();
+    const QString stepAngle = QString::number(stepDegrees);
+
     QAction *clockwiseAction = menu.addAction(tr("Rotate Clockwise %1° (R)").arg(stepAngle));
     QAction *counterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise %1° (Shift+R)").arg(stepAngle));
+
     QAction *quarterClockwiseAction = nullptr;
     QAction *quarterCounterclockwiseAction = nullptr;
-    if (!qFuzzyCompare(layoutElement->rotationStepDegrees(), 90.0)) {
-        quarterClockwiseAction = menu.addAction(tr("Rotate Clockwise 90°"));
-        quarterCounterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise 90°"));
+    if (!qFuzzyCompare(stepDegrees, 90.0))
+    {   // if the stepDegrees is not 90, then we can add quarter rotation options
+        if ( isStraightTrack )
+        {
+            quarterClockwiseAction = menu.addAction("Rotate 90°");
+        }
+        else
+        {
+            quarterClockwiseAction = menu.addAction("Rotate Clockwise 90°");
+            quarterCounterclockwiseAction = menu.addAction("Rotate Counterclockwise 90°");
+        }
     }
+
     menu.addSeparator();
+
     QAction *frontAction = menu.addAction(tr("Bring to Front"));
     QAction *backAction = menu.addAction(tr("Send to Back"));
     frontAction->setEnabled(_Projects.cityLayouts().last() != layoutElement);
     backAction->setEnabled(_Projects.cityLayouts().first() != layoutElement);
+
     menu.addSeparator();
+
     QAction *deleteAction = menu.addAction(tr("Delete"));
     QAction *chosenAction = menu.exec(event->globalPos());
     if (chosenAction == clockwiseAction) {
         rotateSelectedPlate(1);
-    } else if (chosenAction == counterclockwiseAction) {
+    } else if (counterclockwiseAction && chosenAction == counterclockwiseAction) {
         rotateSelectedPlate(-1);
     } else if (quarterClockwiseAction && chosenAction == quarterClockwiseAction) {
         rotateSelectedPlateByDegrees(90.0);
@@ -422,6 +438,7 @@ QJsonObject CityLayoutView::savedLayout() const
         element->sourcePixmap().save(&buffer, "PNG");
         elements.append(QJsonObject{
             {QStringLiteral("name"), element->name()},
+            {QStringLiteral("resourcePath"), element->resourcePath()},
             {QStringLiteral("widthStuds"), element->plateSize().width()},
             {QStringLiteral("heightStuds"), element->plateSize().height()},
             {QStringLiteral("rotationDegrees"), element->rotationDegrees()},
@@ -478,9 +495,9 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
         }
         if (foundConnection) return (QPointF(position) + connectionOffset).toPoint();
     }
-    // A diagonal straight track cannot align its sleeper body to the stud lattice.
+    // A diagonal straight track or switch cannot align its body to the stud lattice.
     // Keep rail-end snapping above, then let unmatched diagonal tracks float.
-    if (movingElement && movingElement->plateSize() == QSize(8, 16)
+    if (movingElement && (movingElement->isStraightTrack() || movingElement->isSwitchTrack())
         && qAbs(std::remainder(movingElement->rotationDegrees(), 90.0)) > 1e-6) {
         return position;
     }

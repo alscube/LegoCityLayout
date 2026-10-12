@@ -31,9 +31,18 @@ inline constexpr qreal pixelsPerInch = 6.4;
 inline constexpr qreal pixelsPerStud = pixelsPerInch * studPitchMillimeters / millimetersPerInch;
 inline constexpr qreal plateStuds = 32.0;
 inline constexpr qreal plateSpacing = plateStuds * pixelsPerStud;
-inline constexpr qreal curveArcStuds = 16.0;
 inline constexpr qreal curveSweepDegrees = 22.5;
-inline constexpr qreal curveRadiusStuds = curveArcStuds / (3.14159265358979323846 / 8.0);
+// Standard LEGO R40 curves have a 40-stud centerline radius. Their nominal
+// 16-stud length is not the exact arc length (40 * pi / 8).
+inline constexpr qreal curveRadiusStuds = 40.0;
+
+// Switch end-sleeper origins measured from LDraw 53404/53407 (20 LDU per stud).
+inline constexpr qreal switchCanvasWidthStuds = 24.0;
+inline constexpr qreal switchCanvasHeightStuds = 36.0;
+inline constexpr qreal switchEntranceYStuds = 1.0;
+inline constexpr qreal switchStraightLengthStuds = 32.0;
+inline constexpr qreal switchBranchOffsetStuds = 259.103 / 20.0;
+inline constexpr qreal switchBranchLengthStuds = (333.852 + 320.0) / 20.0;
 
 inline QPointF snappedPoint(const QPointF &point, const QPointF &origin, qreal zoom)
 {

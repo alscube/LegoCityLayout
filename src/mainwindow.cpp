@@ -27,6 +27,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCloseEvent>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
@@ -66,6 +67,12 @@ MainWindow::~MainWindow()
 }
 
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (_projectView->confirmCloseAllProjects()) event->accept();
+    else event->ignore();
+}
+
 void MainWindow::SetupMainMenu( )
 {
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
@@ -90,6 +97,12 @@ void MainWindow::SetupMainMenu( )
     saveTableAction->setShortcut(QKeySequence::Save);
     connect(saveTableAction, &QAction::triggered,
             _projectView, &ProjectView::saveTableDefinition);
+
+    fileMenu->addSeparator();
+    auto *quitAction = fileMenu->addAction(tr("&Quit"));
+    quitAction->setShortcut(QKeySequence::Quit);
+    quitAction->setMenuRole(QAction::QuitRole);
+    connect(quitAction, &QAction::triggered, qApp, &QApplication::closeAllWindows);
 
     QMenu *tableMenu = menuBar()->addMenu(tr("&View"));
 

@@ -42,7 +42,7 @@ CityLayoutElement* CityLayoutElements::elementAt( const QPoint &position ) const
 {
     for (qsizetype index = size(); index-- > 0;) {
         CityLayoutElement *image = at(index);
-        if (image->geometry().contains(position)) {
+        if (image->containsPoint(position - image->pos())) {
             return image;
         }
     }
@@ -84,9 +84,7 @@ void CityLayoutElements::updateElementHighLite(CityLayoutElement* element)
 
     const bool highlighted = (element == _SelectedElement);
 
-    element->setStyleSheet(highlighted
-                               ? QStringLiteral("border: 2px solid orange;")
-                               : QString());
+    element->setSelectionHighlighted(highlighted);
 }
 
 
@@ -138,7 +136,7 @@ bool CityLayoutElements::wasElementClicked( CityLayoutView* view, const QPoint p
     for (qsizetype index = size(); index-- > 0;)
     {
         CityLayoutElement *image = at(index);
-        if (image->geometry().contains(position))
+        if (image->containsPoint(position - image->pos()))
         {
             setDraggedElement(image);
 

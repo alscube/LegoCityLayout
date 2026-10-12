@@ -237,7 +237,7 @@ void ProjectView::startProject(const QString &title)
 
 bool ProjectView::setCurrentProjectIndex(int index)
 {
-    if (!_Projects.project(index))
+    if (index != -1 && !_Projects.project(index))
         return false;
 
     // hide the current project's elements
@@ -247,6 +247,11 @@ bool ProjectView::setCurrentProjectIndex(int index)
 
     // switch to the new project
     _Projects.setCurrentProjectIndex(index);
+    if (index == -1) {
+        m_cityLayoutView->activateProject();
+        setCurrentWidget(m_openOrCreateProjectView);
+        return true;
+    }
 
     for (auto *element : _Projects.cityLayouts())
         element->show();
@@ -453,12 +458,13 @@ bool ProjectView::openLayout(const QString &path)
         || (root.contains("cityLayout") && (!root.value("cityLayout").isObject()
             || !city.value("elements").isArray())))
         return fail(tr("Invalid city layout."));
-    struct Plate { QString name; QPixmap image; QSize size; QPoint position; qreal rotation; int imageGeometryVersion; };
+    struct Plate { QString name; QString resourcePath; QPixmap image; QSize size; QPoint position; qreal rotation; int imageGeometryVersion; };
     QList<Plate> plates;
     for (const auto &value : city.value("elements").toArray()) {
         const auto element = value.toObject();
         Plate plate;
         plate.name = element.value("name").toString();
+        plate.resourcePath = element.value("resourcePath").toString();
         plate.size = QSize(element.value("widthStuds").toInt(), element.value("heightStuds").toInt());
         QPointF position;
         if (!readPoint(value, position) || qAbs(position.x()) > 10000000 || qAbs(position.y()) > 10000000)
@@ -466,11 +472,8 @@ bool ProjectView::openLayout(const QString &path)
         plate.position = position.toPoint();
         plate.rotation = element.value("rotationDegrees").toDouble(-1);
         plate.imageGeometryVersion = element.value("imageGeometryVersion").toInt(0);
-        const qreal rotationStep = (plate.size == QSize(17, 11) || plate.size == QSize(8, 16))
-            ? LegoGrid::curveSweepDegrees : 90.0;
         if (plate.size.width() <= 0 || plate.size.height() <= 0
             || !std::isfinite(plate.rotation) || plate.rotation < 0 || plate.rotation >= 360
-            || qAbs(plate.rotation / rotationStep - qRound(plate.rotation / rotationStep)) > 1e-9
             || !plate.image.loadFromData(QByteArray::fromBase64(
                 element.value("imagePngBase64").toString().toLatin1()), "PNG"))
             return fail(tr("Invalid city plate."));
@@ -479,6 +482,11 @@ bool ProjectView::openLayout(const QString &path)
         if (!element.value("imageIsUnrotated").toBool(false)) {
             plate.image = plate.image.transformed(QTransform().rotate(-plate.rotation));
         }
+        const CityLayoutElement identity(plate.name, plate.image, plate.size,
+                                         LegoGrid::pixelsPerStud, 1.0, nullptr, plate.resourcePath);
+        const qreal rotationStep = identity.rotationStepDegrees();
+        if (qAbs(plate.rotation / rotationStep - qRound(plate.rotation / rotationStep)) > 1e-9)
+            return fail(tr("Invalid city plate."));
         plates.append(plate);
     }
 
@@ -489,7 +497,7 @@ bool ProjectView::openLayout(const QString &path)
     project->tableEditor.viewScale = zoom;
     project->gridOrigin = origin;
     for (const auto &plate : plates) {
-        auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, LegoGrid::pixelsPerStud, zoom, m_cityLayoutView);
+        auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, LegoGrid::pixelsPerStud, zoom, m_cityLayoutView, plate.resourcePath);
         element->rotateByDegrees(plate.rotation);
         // Legacy tracks used the padded canvas as their stud-aligned origin.
         // Keep that intended origin when adopting the calibrated body bounds.
@@ -520,7 +528,7 @@ bool ProjectView::openLayout(const QString &path)
 }
 
 
-void ProjectView::closeProject()
+bool ProjectView::confirmSaveCurrentProject()
 {
     QString projectTitle = _Projects.title();
     if (!projectTitle.isEmpty()
@@ -533,9 +541,30 @@ void ProjectView::closeProject()
             QMessageBox::Save);
         if (choice == QMessageBox::Cancel
             || (choice == QMessageBox::Save && !saveTableDefinition())) {
-            return;
+            return false;
         }
     }
+
+    return true;
+}
+
+bool ProjectView::confirmCloseAllProjects()
+{
+    const int originalIndex = _Projects.currentProjectIndex();
+    for (int index = 0; index < _Projects.projectCount(); ++index) {
+        setCurrentProjectIndex(index);
+        if (!confirmSaveCurrentProject()) {
+            setCurrentProjectIndex(originalIndex);
+            return false;
+        }
+    }
+    setCurrentProjectIndex(originalIndex);
+    return true;
+}
+
+void ProjectView::closeProject()
+{
+    if (!confirmSaveCurrentProject()) return;
 
     _Projects.removeProject(_Projects.currentProjectIndex());
     _Projects.setCurrentProjectIndex(-1);

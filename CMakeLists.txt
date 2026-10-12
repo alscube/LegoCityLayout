@@ -10,7 +10,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Svg)
 
-qt_add_executable(LegoCityLayout
+set(LAYOUT_SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/mainwindow.h
@@ -49,6 +49,8 @@ qt_add_executable(LegoCityLayout
     resources.qrc
 )
 
+qt_add_executable(LegoCityLayout ${LAYOUT_SOURCES})
+
 target_link_libraries(LegoCityLayout PRIVATE Qt6::Widgets Qt6::Svg)
 
 set_target_properties(LegoCityLayout PROPERTIES
@@ -61,3 +63,14 @@ install(TARGETS LegoCityLayout
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+option(LEGO_BUILD_TESTS "Build track connection integration checks" OFF)
+if(LEGO_BUILD_TESTS)
+    enable_testing()
+    set(TEST_LAYOUT_SOURCES ${LAYOUT_SOURCES})
+    list(REMOVE_ITEM TEST_LAYOUT_SOURCES src/main.cpp)
+    qt_add_executable(switch_connections_check tests/switch_connections.cpp ${TEST_LAYOUT_SOURCES})
+    target_include_directories(switch_connections_check PRIVATE src)
+    target_link_libraries(switch_connections_check PRIVATE Qt6::Widgets Qt6::Svg)
+    add_test(NAME switch_connections COMMAND switch_connections_check -platform offscreen)
+endif()

@@ -59,6 +59,19 @@ class QMouseEvent;
 //       Angle:  22.5° per piece (16 pieces make a full 360° circle;
 //               4 pieces make a 90° quarter-turn)
 
+// Track (switch)
+//
+
+// Track (Flex Track)
+// * Length: Each individual flex track piece is 4 studs long.
+// * Equivalency Ratio: 4 flexible track pieces equal the exact length
+//   of 1 standard straight or curved track piece (which measures 16 studs long).
+// * Width & Gauge: The rail gauge follows standard LEGO proportions—rails
+//   are spaced 6 studs apart, with an extra stud on the ties on each side
+//   making the total track width 8 studs.
+// * Design/Mechanism: Unlike rigid tracks, each 4-stud piece pivots in the
+//   middle, allowing the strip to bend slightly to the left or right, or stay straight.
+
 
 class LayoutElement final : public QWidget
 {

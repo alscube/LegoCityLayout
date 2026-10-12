@@ -50,6 +50,7 @@ public:
     bool openLayout(const QString &path);
 
     void closeProject();
+    bool confirmCloseAllProjects();
 
     bool setCurrentProjectIndex(int index);
 
@@ -62,6 +63,7 @@ private:
     void AddToolBar( QVBoxLayout* layout );
     void AddViews( QVBoxLayout* layout );
 
+    bool confirmSaveCurrentProject();
     void refreshToolbar();
     void setCurrentWidget(QWidget *widget);
     QWidget *currentWidget() const;

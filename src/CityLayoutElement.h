@@ -33,9 +33,16 @@ public:
                                const QSize &plateSize,
                                qreal pixelsPerStud,
                                qreal zoomFactor = 1.0,
-                               QWidget *parent = nullptr);
+                               QWidget *parent = nullptr,
+                               const QString &resourcePath = QString());
 
     QString name() const;
+    QString resourcePath() const { return m_resourcePath; }
+    bool isStraightTrack() const { return m_isStraightTrack; }
+    bool isSwitchTrack() const { return m_switchHandedness != 0; }
+    bool isTrack() const { return m_isStraightTrack || m_isCurvedTrack || isSwitchTrack(); }
+    bool containsPoint(const QPoint &localPoint) const;
+    void setSelectionHighlighted(bool highlighted);
     QSize plateSize() const { return m_plateSize; }
     void setZoomFactor(qreal zoomFactor);
     QPixmap savedPixmap() const;
@@ -50,8 +57,14 @@ public:
     QPixmap sourcePixmap() const { return m_originalPixmap; }
     QList<QLineF> trackConnections() const;
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
+    QRect m_selectionBounds;
+    bool m_selectionHighlighted = false;
     QString m_name;
+    QString m_resourcePath;
     QPixmap m_originalPixmap;
     QSize m_plateSize;
     QSizeF m_unscaledSize;
@@ -59,6 +72,7 @@ private:
     QRectF m_unscaledFootprint;
     qreal m_zoomFactor = 1.0;
     qreal m_rotationDegrees = 0.0;
+    int m_switchHandedness = 0; // -1 left, +1 right.
     bool m_isCurvedTrack = false;
     bool m_isStraightTrack = false;
     QTransform m_curveArtworkTransform;

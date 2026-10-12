@@ -25,6 +25,7 @@
 #include <QPainterPath>
 #include <QPolygonF>
 #include <QRadialGradient>
+#include <QLinearGradient>
 #include <QImage>
 #include <array>
 
@@ -93,6 +94,34 @@ const QPixmap &matchingCurveArtwork()
     }();
     return matched;
 }
+
+void highlightStraightRails(QPixmap &artwork, qreal sourceOffsetX = 0.0)
+{
+    QPainter painter(&artwork);
+    // Paint onto the existing plastic, retaining the photo's alpha and detail.
+    painter.setCompositionMode(QPainter::CompositionMode_SourceAtop);
+    for (qreal railLeft : {77.0, 480.0}) {
+        const qreal x = sourceOffsetX + railLeft;
+        QLinearGradient bevel(x, 0, x + 79.0, 0);
+        // Separate the flat crown, narrow reflective edge, broad front face,
+        // and recessed base. A broad brightness gradient makes the rail round.
+        bevel.setColorAt(0.0, Qt::transparent);
+        bevel.setColorAt(0.04, QColor(72, 77, 83, 200));
+        bevel.setColorAt(0.09, QColor(94, 99, 105, 235));
+        bevel.setColorAt(0.25, QColor(101, 106, 112, 235));
+        bevel.setColorAt(0.29, QColor(107, 113, 120, 240));
+        bevel.setColorAt(0.31, QColor(156, 161, 166, 245));
+        bevel.setColorAt(0.34, QColor(165, 169, 173, 245));
+        bevel.setColorAt(0.37, QColor(108, 113, 119, 245));
+        bevel.setColorAt(0.40, QColor(94, 99, 105, 245));
+        bevel.setColorAt(0.76, QColor(89, 94, 100, 245));
+        bevel.setColorAt(0.82, QColor(61, 66, 72, 245));
+        bevel.setColorAt(0.88, QColor(42, 46, 51, 245));
+        bevel.setColorAt(0.95, QColor(40, 44, 49, 235));
+        bevel.setColorAt(1.0, Qt::transparent);
+        painter.fillRect(QRectF(x, 0, 79.0, 1344.0), bevel);
+    }
+}
 }
 
 CityLayoutElement::CityLayoutElement(const QString &name,
@@ -100,24 +129,42 @@ CityLayoutElement::CityLayoutElement(const QString &name,
                                      const QSize &plateSize,
                                      qreal pixelsPerStud,
                                      qreal zoomFactor,
-                                     QWidget *parent)
-    : QLabel(parent), m_name(name), m_originalPixmap(pixmap)
+                                     QWidget *parent,
+                                     const QString &resourcePath)
+    : QLabel(parent), m_name(name), m_resourcePath(resourcePath), m_originalPixmap(pixmap)
     , m_plateSize(plateSize)
     , m_unscaledSize(plateSize.width() * pixelsPerStud,
                      plateSize.height() * pixelsPerStud)
 {
+    // New elements carry resource identity; only older saves need artwork recognition.
+    if (m_resourcePath == QStringLiteral(":/images/LeftSwitchTrack.png")) m_switchHandedness = -1;
+    else if (m_resourcePath == QStringLiteral(":/images/RightSwitchTrack.png")) m_switchHandedness = 1;
+    // Refresh saved switches with the current calibrated artwork, as for curves.
+    if (isSwitchTrack()) {
+        const QPixmap currentSwitch(m_resourcePath);
+        if (!currentSwitch.isNull()) m_originalPixmap = currentSwitch;
+    }
+    const bool legacyIdentity = m_resourcePath.isEmpty();
+    m_isStraightTrack = m_resourcePath == QStringLiteral(":/images/StrightTrack.png")
+        || (legacyIdentity && plateSize == QSize(8, 16) && pixmap.size() == QSize(1142, 1377));
     // Refresh recognized stock curves embedded in saved layouts with current art.
     QPixmap currentCurve;
-    if (plateSize == QSize(17, 11)) currentCurve.load(QStringLiteral(":/images/CurvedTrack.png"));
-    const bool stockCurve = plateSize == QSize(17, 11) && !currentCurve.isNull()
+    if (m_resourcePath == QStringLiteral(":/images/CurvedTrack.png")
+        || (legacyIdentity && plateSize == QSize(17, 11))) currentCurve.load(QStringLiteral(":/images/CurvedTrack.png"));
+    const bool stockCurve = !currentCurve.isNull()
         && (pixmap.size() == QSize(1520, 1040) || pixmap.size() == QSize(1516, 1038)
             || pixmap.size() == currentCurve.size());
+    m_isCurvedTrack = m_resourcePath == QStringLiteral(":/images/CurvedTrack.png") || stockCurve;
+    if (legacyIdentity) {
+        if (m_isStraightTrack) m_resourcePath = QStringLiteral(":/images/StrightTrack.png");
+        else if (m_isCurvedTrack) m_resourcePath = QStringLiteral(":/images/CurvedTrack.png");
+    }
     if (stockCurve) m_originalPixmap = currentCurve;
     m_sourceBounds = m_originalPixmap.rect();
     m_unscaledFootprint = QRectF(QPointF(), m_unscaledSize);
     // Calibrate the bundled StrightTrack artwork by its sleeper body, not its
     // padded PNG canvas. Saved tracks retain this full-resolution source image.
-    if (plateSize == QSize(8, 16) && pixmap.size() == QSize(1142, 1377)) {
+    if (m_isStraightTrack && pixmap.size() == QSize(1142, 1377)) {
         m_sourceBounds = QRect(310, 0, 640, 1344);
         constexpr qreal bodyTop = 46.0;
         constexpr qreal bodyHeight = 1248.0;
@@ -125,7 +172,6 @@ CityLayoutElement::CityLayoutElement(const QString &name,
         m_unscaledFootprint = QRectF(0.0, bodyTop * scaleY,
                                     m_unscaledSize.width(), m_unscaledSize.height());
         m_unscaledSize.setHeight(m_sourceBounds.height() * scaleY);
-        m_isStraightTrack = true;
     }
     if (stockCurve) {
         // Retain horizontal connector margins; the calibrated artwork fits an 11-stud height.
@@ -180,8 +226,9 @@ void CityLayoutElement::setZoomFactor(qreal zoomFactor)
         // Keep the photo's sleeper body inside the actual eight-stud track width.
         // Replace the terminal sleepers and couplings with the straight track's
         // matching end artwork; retain the calibrated curved body between them.
-        const QPixmap straightEnds(QStringLiteral(":/images/StrightTrack.png"));
+        QPixmap straightEnds(QStringLiteral(":/images/StrightTrack.png"));
         const bool matchingEnds = straightEnds.size() == QSize(1142, 1377);
+        if (matchingEnds) highlightStraightRails(straightEnds, 310.0);
         const qreal startStation = matchingEnds ? 1.0 : -0.8;
         const qreal endStation = matchingEnds ? 15.0 : 16.8;
         const qreal pitch = m_unscaledFootprint.width() / 17.0;
@@ -227,6 +274,7 @@ void CityLayoutElement::setZoomFactor(qreal zoomFactor)
     } else {
         QPixmap source = m_originalPixmap.copy(m_sourceBounds);
         if (m_isStraightTrack) {
+            if (source.size() == QSize(640, 1344)) highlightStraightRails(source);
             // Mounting holes sit between the stud rows at the center of each
             // large sleeper. Render them before rotation so they follow the track.
             QPainter holes(&source);
@@ -253,6 +301,55 @@ void CityLayoutElement::setZoomFactor(qreal zoomFactor)
     displayedPixmap.setDevicePixelRatio(pixelRatio);
     setPixmap(displayedPixmap);
     setFixedSize(size);
+    if (isTrack()) {
+        // Measure the rendered artwork, excluding transparent canvas added by rotation.
+        const QImage selectionImage = displayedPixmap.toImage().scaled(size, Qt::IgnoreAspectRatio,
+            Qt::FastTransformation).convertToFormat(QImage::Format_ARGB32);
+        m_selectionBounds = QRect();
+        for (int y = 0; y < size.height(); ++y) {
+            const auto *row = reinterpret_cast<const QRgb *>(selectionImage.constScanLine(y));
+            int first = -1;
+            int last = -1;
+            for (int x = 0; x < size.width(); ++x) {
+                if (qAlpha(row[x]) >= 32) {
+                    if (first < 0) first = x;
+                    last = x;
+                }
+            }
+            if (first >= 0) m_selectionBounds = m_selectionBounds.united(QRect(first, y, last - first + 1, 1));
+        }
+    }
+    update();
+}
+
+bool CityLayoutElement::containsPoint(const QPoint &localPoint) const
+{
+    if (!rect().contains(localPoint)) return false;
+    if (!isTrack()) return true;
+    // Use the tight selection rectangle, including holes and gaps inside it.
+    // This keeps the top element selected instead of clicking through to a plate.
+    return m_selectionBounds.adjusted(-2, -2, 2, 2).intersected(rect()).contains(localPoint);
+}
+
+void CityLayoutElement::setSelectionHighlighted(bool highlighted)
+{
+    m_selectionHighlighted = highlighted;
+    setStyleSheet(highlighted && !isTrack()
+        ? QStringLiteral("border: 2px solid orange;") : QString());
+    update();
+}
+
+void CityLayoutElement::paintEvent(QPaintEvent *event)
+{
+    QLabel::paintEvent(event);
+    if (!m_selectionHighlighted || !isTrack()
+        || m_selectionBounds.isEmpty()) return;
+    QPainter painter(this);
+    painter.setPen(QPen(QColor("orange"), 2));
+    painter.setBrush(Qt::NoBrush);
+    const QRect outline = m_selectionBounds.adjusted(-2, -2, 2, 2)
+        .intersected(rect().adjusted(1, 1, -1, -1));
+    painter.drawRect(outline);
 }
 
 QRectF CityLayoutElement::footprintRect() const
@@ -281,7 +378,7 @@ void CityLayoutElement::rotateQuarterTurns(int turns)
 
 qreal CityLayoutElement::rotationStepDegrees() const
 {
-    return m_isCurvedTrack || m_plateSize == QSize(8, 16)
+    return isTrack()
         ? LegoGrid::curveSweepDegrees : 90.0;
 }
 
@@ -311,7 +408,7 @@ QPointF CityLayoutElement::displayedPoint(const QPointF &point) const
 
 QList<QLineF> CityLayoutElement::trackConnections() const
 {
-    if (!m_isStraightTrack && !m_isCurvedTrack) return {};
+    if (!isTrack()) return {};
     QList<QLineF> result;
     const qreal pitch = m_unscaledFootprint.width() / m_plateSize.width();
     const auto addConnection = [&](const QPointF &studPoint, qreal outwardDegrees) {
@@ -320,7 +417,14 @@ QList<QLineF> CityLayoutElement::trackConnections() const
         const QPointF direction(std::cos(angle), std::sin(angle));
         result.append(QLineF(displayedPoint(point), displayedPoint(point + direction * pitch)));
     };
-    if (m_isStraightTrack) {
+    if (isSwitchTrack()) {
+        const qreal trunkX = m_switchHandedness > 0 ? 4.0 : LegoGrid::switchCanvasWidthStuds - 4.0;
+        addConnection(QPointF(trunkX, LegoGrid::switchEntranceYStuds), -90);
+        addConnection(QPointF(trunkX, LegoGrid::switchEntranceYStuds + LegoGrid::switchStraightLengthStuds), 90);
+        addConnection(QPointF(trunkX + m_switchHandedness * LegoGrid::switchBranchOffsetStuds,
+                             LegoGrid::switchEntranceYStuds + LegoGrid::switchBranchLengthStuds),
+                      90.0 - m_switchHandedness * LegoGrid::curveSweepDegrees);
+    } else if (m_isStraightTrack) {
         addConnection(QPointF(4, 0), -90);
         addConnection(QPointF(4, 16), 90);
     } else {

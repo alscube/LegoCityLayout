@@ -22,6 +22,8 @@
 #include "LayoutElementsList.h"
 
 #include <QTabWidget>
+#include <QScrollArea>
+#include "LegoGrid.h"
 #include <QVBoxLayout>
 
 
@@ -60,8 +62,19 @@ void LayoutElementsView::addLayoutElements()
     tracksLayout->addWidget(new LayoutElement(
         tr("Curved Track (22.5°)"), QStringLiteral(":/images/CurvedTrack.png"),
         QSize(17, 11), tracksPage), 0, Qt::AlignHCenter);
+    const QSize switchSize(qRound(LegoGrid::switchCanvasWidthStuds), qRound(LegoGrid::switchCanvasHeightStuds));
+    tracksLayout->addWidget(new LayoutElement(
+        tr("Left Switch"), QStringLiteral(":/images/LeftSwitchTrack.png"),
+        switchSize, tracksPage), 0, Qt::AlignHCenter);
+    tracksLayout->addWidget(new LayoutElement(
+        tr("Right Switch"), QStringLiteral(":/images/RightSwitchTrack.png"),
+        switchSize, tracksPage), 0, Qt::AlignHCenter);
     tracksLayout->addStretch();
-    tabs->addTab(tracksPage, tr("Tracks"));
+    auto *tracksScroll = new QScrollArea(tabs);
+    tracksScroll->setWidgetResizable(true);
+    tracksScroll->setFrameShape(QFrame::NoFrame);
+    tracksScroll->setWidget(tracksPage);
+    tabs->addTab(tracksScroll, tr("Tracks"));
 
     const LayoutElementsList elementsList(platesPage);
 

@@ -10,6 +10,8 @@
         <file alias="TownHall.png">resources/TownHall.png</file>
         <file alias="StrightTrack.png">resources/StrightTrack.png</file>
         <file alias="CurvedTrack.png">resources/CurvedTrack.png</file>
+        <file alias="LeftSwitchTrack.png">resources/LeftSwitchTrack.png</file>
+        <file alias="RightSwitchTrack.png">resources/RightSwitchTrack.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="units-IN.svg">resources/icons/units-IN.svg</file>
