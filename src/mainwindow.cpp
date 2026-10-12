@@ -19,7 +19,7 @@
 #include "mainwindow.h"
 
 #include "LoadedProjects.h"
-#include "LayoutElementsView.h"
+#include "elements/LayoutElementsView.h"
 #include "ProjectView.h"
 #include "SettingsDialog.h"
 #include "TableDefinitionEditorView.h"

@@ -21,7 +21,7 @@
 
 #include "TableDefinition.h"
 #include "TableSurface.h"
-#include "CityLayoutElement.h"
+#include "elements/CityLayoutElement.h"
 #include "LoadedProjects.h"
 #include "UserSettings.h"
 #include "LegoGrid.h"

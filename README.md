@@ -31,3 +31,8 @@ compatible rail ends. Switches have three connection ends.
 
 Switch artwork is derived from CC BY 4.0 LDraw models. See
 [artwork attribution and regeneration](resources/SWITCH_ARTWORK.md).
+
+Flex Track represents one 4-stud segment. Right-click it to adjust the bend
+between -5.625 and +5.625 degrees, or straighten it. Whole-element rotation uses
+5.625-degree steps. The bend and rotation are preserved in saved layouts.
+See [flex artwork and geometry](resources/FLEX_TRACK_ARTWORK.md).

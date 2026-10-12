@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 #include "LoadedProjects.h"
 
-#include "CityLayoutElement.h"
+#include "elements/CityLayoutElement.h"
 #include <QtMath>
 
 LoadedProjects &LoadedProjects::instance()

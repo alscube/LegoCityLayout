@@ -32,7 +32,7 @@
 
 #include "LoadedProjects.h"
 #include "CityLayoutView.h"
-#include "CityLayoutElement.h"
+#include "elements/CityLayoutElement.h"
 #include "OpenOrCreateProjectView.h"
 #include "TableDefinitionEditorView.h"
 
@@ -458,7 +458,7 @@ bool ProjectView::openLayout(const QString &path)
         || (root.contains("cityLayout") && (!root.value("cityLayout").isObject()
             || !city.value("elements").isArray())))
         return fail(tr("Invalid city layout."));
-    struct Plate { QString name; QString resourcePath; QPixmap image; QSize size; QPoint position; qreal rotation; int imageGeometryVersion; };
+    struct Plate { QString name; QString resourcePath; QPixmap image; QSize size; QPoint position; qreal rotation; qreal flexBend; int imageGeometryVersion; };
     QList<Plate> plates;
     for (const auto &value : city.value("elements").toArray()) {
         const auto element = value.toObject();
@@ -471,6 +471,9 @@ bool ProjectView::openLayout(const QString &path)
             return fail(tr("Invalid plate position."));
         plate.position = position.toPoint();
         plate.rotation = element.value("rotationDegrees").toDouble(-1);
+        if (element.contains("flexBendDegrees") && !element.value("flexBendDegrees").isDouble())
+            return fail(tr("Invalid flex track bend."));
+        plate.flexBend = element.value("flexBendDegrees").toDouble(0.0);
         plate.imageGeometryVersion = element.value("imageGeometryVersion").toInt(0);
         if (plate.size.width() <= 0 || plate.size.height() <= 0
             || !std::isfinite(plate.rotation) || plate.rotation < 0 || plate.rotation >= 360
@@ -484,6 +487,9 @@ bool ProjectView::openLayout(const QString &path)
         }
         const CityLayoutElement identity(plate.name, plate.image, plate.size,
                                          LegoGrid::pixelsPerStud, 1.0, nullptr, plate.resourcePath);
+        if (!std::isfinite(plate.flexBend) || qAbs(plate.flexBend) > LegoGrid::flexMaximumBendDegrees
+            || (!identity.isFlexTrack() && !qFuzzyIsNull(plate.flexBend)))
+            return fail(tr("Invalid flex track bend."));
         const qreal rotationStep = identity.rotationStepDegrees();
         if (qAbs(plate.rotation / rotationStep - qRound(plate.rotation / rotationStep)) > 1e-9)
             return fail(tr("Invalid city plate."));
@@ -498,6 +504,7 @@ bool ProjectView::openLayout(const QString &path)
     project->gridOrigin = origin;
     for (const auto &plate : plates) {
         auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, LegoGrid::pixelsPerStud, zoom, m_cityLayoutView, plate.resourcePath);
+        element->setFlexBendDegrees(plate.flexBend);
         element->rotateByDegrees(plate.rotation);
         // Legacy tracks used the padded canvas as their stud-aligned origin.
         // Keep that intended origin when adopting the calibrated body bounds.

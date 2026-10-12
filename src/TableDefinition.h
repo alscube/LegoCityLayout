@@ -42,6 +42,8 @@ public:
     bool isEmpty() const;
 
 private:
+    mutable QPainterPath m_usableArea;
+    mutable bool m_usableAreaValid = false;
     QList<TableSurface> m_surfaces;
     QList<QLineF> m_openSides;
 };

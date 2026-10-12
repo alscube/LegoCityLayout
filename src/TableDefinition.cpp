@@ -38,6 +38,7 @@ bool TableDefinition::addSurface(const TableSurface &surface)
         return false;
     }
 
+    m_usableAreaValid = false;
     m_surfaces.append(surface);
     return true;
 }
@@ -48,6 +49,7 @@ bool TableDefinition::setSurface(qsizetype index, const TableSurface &surface)
         return false;
     }
 
+    m_usableAreaValid = false;
     m_surfaces[index] = surface;
     return true;
 }
@@ -58,18 +60,21 @@ bool TableDefinition::removeSurface(qsizetype index)
         return false;
     }
 
+    m_usableAreaValid = false;
     m_surfaces.removeAt(index);
     return true;
 }
 
 void TableDefinition::clear()
 {
+    m_usableAreaValid = false;
     m_surfaces.clear();
     m_openSides.clear();
 }
 
 void TableDefinition::translate(const QPointF &offset)
 {
+    if (m_usableAreaValid) m_usableArea.translate(offset);
     for (TableSurface &surface : m_surfaces) {
         QPolygonF outline = surface.outline();
         outline.translate(offset);
@@ -82,6 +87,7 @@ void TableDefinition::translate(const QPointF &offset)
 
 void TableDefinition::scale(const QPointF &anchor, qreal factor)
 {
+    m_usableAreaValid = false;
     for (TableSurface &surface : m_surfaces) {
         QPolygonF outline = surface.outline();
         for (QPointF &point : outline) {
@@ -97,6 +103,7 @@ void TableDefinition::scale(const QPointF &anchor, qreal factor)
 
 QPainterPath TableDefinition::usableArea() const
 {
+    if (m_usableAreaValid) return m_usableArea;
     QPainterPath area;
     area.setFillRule(Qt::WindingFill);
     for (const TableSurface &surface : m_surfaces) {
@@ -105,7 +112,9 @@ QPainterPath TableDefinition::usableArea() const
         surfaceArea.closeSubpath();
         area = area.united(surfaceArea);
     }
-    return area;
+    m_usableArea = area;
+    m_usableAreaValid = true;
+    return m_usableArea;
 }
 
 bool TableDefinition::contains(const QPointF &point) const

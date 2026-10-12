@@ -22,7 +22,7 @@
 
 #include "CityLayoutView.h"
 #include "LegoGrid.h"
-#include "CityLayoutElement.h"
+#include "elements/CityLayoutElement.h"
 #include "LoadedProjects.h"
 
 #include <QApplication>
@@ -33,6 +33,7 @@
 #include <QEvent>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QInputDialog>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -106,6 +107,8 @@ void CityLayoutView::dropEvent(QDropEvent *event)
     auto *layoutElement = new CityLayoutElement(
         name, pixmap, plateSize, pixelsPerStud,
         _Projects.currentProject()->zoomFactor, this, resourcePath);
+
+    if (layoutElement->isStraightTrack()) layoutElement->rotateByDegrees(90.0);
 
     const QPoint requestedPosition = event->position().toPoint()
                                      - QPoint(layoutElement->width() / 2,
@@ -382,6 +385,15 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
 
     menu.addSeparator();
 
+    QAction *bendAction = nullptr;
+    QAction *straightenAction = nullptr;
+    if (layoutElement->isFlexTrack()) {
+        bendAction = menu.addAction(tr("Adjust Bend..."));
+        straightenAction = menu.addAction(tr("Straighten Flex Track"));
+        straightenAction->setEnabled(!qFuzzyIsNull(layoutElement->flexBendDegrees()));
+        menu.addSeparator();
+    }
+
     QAction *frontAction = menu.addAction(tr("Bring to Front"));
     QAction *backAction = menu.addAction(tr("Send to Back"));
     frontAction->setEnabled(_Projects.cityLayouts().last() != layoutElement);
@@ -399,6 +411,21 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
         rotateSelectedPlateByDegrees(90.0);
     } else if (quarterCounterclockwiseAction && chosenAction == quarterCounterclockwiseAction) {
         rotateSelectedPlateByDegrees(-90.0);
+    } else if (bendAction && chosenAction == bendAction) {
+        bool accepted = false;
+        const qreal degrees = QInputDialog::getDouble(this, tr("Flex Track Bend"),
+            tr("Bend angle (°): negative = left, positive = right"),
+            layoutElement->flexBendDegrees(), -LegoGrid::flexMaximumBendDegrees,
+            LegoGrid::flexMaximumBendDegrees, 3, &accepted);
+        if (accepted && layoutElement->setFlexBendDegrees(degrees)) {
+            ++_Projects.currentProject()->changeRevision;
+            update();
+        }
+    } else if (straightenAction && chosenAction == straightenAction) {
+        if (layoutElement->setFlexBendDegrees(0.0)) {
+            ++_Projects.currentProject()->changeRevision;
+            update();
+        }
     } else if (chosenAction == frontAction) {
         if (_Projects.cityLayouts().bringSelectedToFront()) {
             ++_Projects.currentProject()->changeRevision;
@@ -442,6 +469,7 @@ QJsonObject CityLayoutView::savedLayout() const
             {QStringLiteral("widthStuds"), element->plateSize().width()},
             {QStringLiteral("heightStuds"), element->plateSize().height()},
             {QStringLiteral("rotationDegrees"), element->rotationDegrees()},
+            {QStringLiteral("flexBendDegrees"), element->flexBendDegrees()},
             {QStringLiteral("imageGeometryVersion"), 2},
             {QStringLiteral("imageIsUnrotated"), true},
             {QStringLiteral("x"), element->x()},
@@ -497,7 +525,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
     }
     // A diagonal straight track or switch cannot align its body to the stud lattice.
     // Keep rail-end snapping above, then let unmatched diagonal tracks float.
-    if (movingElement && (movingElement->isStraightTrack() || movingElement->isSwitchTrack())
+    if (movingElement && (movingElement->isStraightTrack() || movingElement->isSwitchTrack() || movingElement->isFlexTrack())
         && qAbs(std::remainder(movingElement->rotationDegrees(), 90.0)) > 1e-6) {
         return position;
     }

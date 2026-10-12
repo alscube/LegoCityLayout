@@ -12,6 +12,9 @@
         <file alias="CurvedTrack.png">resources/CurvedTrack.png</file>
         <file alias="LeftSwitchTrack.png">resources/LeftSwitchTrack.png</file>
         <file alias="RightSwitchTrack.png">resources/RightSwitchTrack.png</file>
+        <file alias="FlexTrack.png">resources/FlexTrack.png</file>
+        <file alias="FlexTrackFemale.png">resources/FlexTrackFemale.png</file>
+        <file alias="FlexTrackMale.png">resources/FlexTrackMale.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="units-IN.svg">resources/icons/units-IN.svg</file>

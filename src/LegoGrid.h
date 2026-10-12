@@ -17,6 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <QHash>
+#include <QPixmap>
 #include <QPainter>
 #include <QPainterPath>
 #include <QtMath>
@@ -44,6 +46,11 @@ inline constexpr qreal switchStraightLengthStuds = 32.0;
 inline constexpr qreal switchBranchOffsetStuds = 259.103 / 20.0;
 inline constexpr qreal switchBranchLengthStuds = (333.852 + 320.0) / 20.0;
 
+inline constexpr qreal flexLengthStuds = 4.0;
+inline constexpr qreal flexMaximumBendDegrees = 5.625;
+inline constexpr qreal flexCanvasWidthStuds = 8.0;
+inline constexpr qreal flexCanvasHeightStuds = 10.0;
+
 inline QPointF snappedPoint(const QPointF &point, const QPointF &origin, qreal zoom)
 {
     const qreal spacing = pixelsPerStud * zoom;
@@ -61,24 +68,72 @@ inline void paintStuds(QPainter &painter, const QPainterPath &surface,
     const qreal radius = spacing * studDiameterMillimeters / studPitchMillimeters / 2.0;
     const QRectF bounds = surface.boundingRect().intersected(viewport).adjusted(-radius, -radius, radius, radius);
     if (bounds.isEmpty()) return;
-    // Grid lines mark cell edges; stud centers sit half a pitch inside each cell.
-    const qreal firstX = origin.x() + (std::ceil((bounds.left() - origin.x()) / spacing - 0.5) + 0.5) * spacing;
-    const qreal firstY = origin.y() + (std::ceil((bounds.top() - origin.y()) / spacing - 0.5) + 0.5) * spacing;
+    // Cache tiles in grid coordinates so translating the view reuses the studs.
+    // Geometry checks and antialiased ellipse rendering run only for new tiles.
+    struct StudCache {
+        QPainterPath surface;
+        qreal zoom = 0;
+        qreal devicePixelRatio = 0;
+        QHash<QPair<int, int>, QPixmap> tiles;
+    };
+    static StudCache cache;
+    const QPainterPath localSurface = QTransform::fromTranslate(-origin.x(), -origin.y()).map(surface);
+    const qreal dpr = painter.device()->devicePixelRatioF();
+    bool sameSurface = cache.surface.fillRule() == localSurface.fillRule()
+        && cache.surface.elementCount() == localSurface.elementCount();
+    for (int i = 0; sameSurface && i < localSurface.elementCount(); ++i) {
+        const auto previous = cache.surface.elementAt(i);
+        const auto current = localSurface.elementAt(i);
+        sameSurface = previous.type == current.type
+            && qAbs(previous.x - current.x) < 1e-6
+            && qAbs(previous.y - current.y) < 1e-6;
+    }
+    if (!sameSurface || !qFuzzyCompare(cache.zoom, zoom)
+        || !qFuzzyCompare(cache.devicePixelRatio, dpr)) {
+        cache.surface = localSurface;
+        cache.zoom = zoom;
+        cache.devicePixelRatio = dpr;
+        cache.tiles.clear();
+    }
+    constexpr int tileSize = 256;
+    const QRectF localBounds = bounds.translated(-origin);
+    const int left = int(std::floor(localBounds.left() / tileSize));
+    const int right = int(std::floor(localBounds.right() / tileSize));
+    const int top = int(std::floor(localBounds.top() / tileSize));
+    const int bottom = int(std::floor(localBounds.bottom() / tileSize));
     painter.save();
-    painter.setClipPath(surface, Qt::IntersectClip);
-    painter.setPen(QPen(QColor(80, 55, 30, 100), 0.75));
-    painter.setBrush(QColor(255, 255, 255, 35));
-    for (qreal y = firstY; y <= bounds.bottom(); y += spacing) {
-        for (qreal x = firstX; x <= bounds.right(); x += spacing) {
-            // A table boundary may fall between stud cells in an existing layout.
-            // Leave room for the 3-pixel table outline and the stud's own stroke;
-            // paint complete studs rather than clipped fragments at edges/holes.
-            constexpr qreal outlineClearance = 1.5 + 0.75 / 2.0;
-            const qreal extent = radius + outlineClearance;
-            const QRectF studBounds(x - extent, y - extent, 2 * extent, 2 * extent);
-            if (surface.contains(studBounds)) {
-                painter.drawEllipse(QPointF(x, y), radius, radius);
+    for (int row = top; row <= bottom; ++row) {
+        for (int column = left; column <= right; ++column) {
+            const QPair<int, int> key(column, row);
+            auto tile = cache.tiles.constFind(key);
+            if (tile == cache.tiles.cend()) {
+                // Bound retained raster memory while exploring large layouts.
+                if (cache.tiles.size() >= 64) cache.tiles.erase(cache.tiles.begin());
+                QPixmap image(qCeil(tileSize * dpr), qCeil(tileSize * dpr));
+                image.setDevicePixelRatio(dpr);
+                image.fill(Qt::transparent);
+                QPainter tilePainter(&image);
+                tilePainter.setRenderHint(QPainter::Antialiasing);
+                tilePainter.translate(-column * tileSize, -row * tileSize);
+                tilePainter.setPen(QPen(QColor(80, 55, 30, 100), 0.75));
+                tilePainter.setBrush(QColor(255, 255, 255, 35));
+                const QRectF tileBounds(column * tileSize, row * tileSize, tileSize, tileSize);
+                const QRectF centers = tileBounds.adjusted(-radius - 1, -radius - 1, radius + 1, radius + 1);
+                const qreal firstX = (std::ceil(centers.left() / spacing - 0.5) + 0.5) * spacing;
+                const qreal firstY = (std::ceil(centers.top() / spacing - 0.5) + 0.5) * spacing;
+                for (qreal y = firstY; y <= centers.bottom(); y += spacing) {
+                    for (qreal x = firstX; x <= centers.right(); x += spacing) {
+                        // Keep complete studs away from table edges and holes.
+                        const qreal extent = radius + 1.5 + 0.75 / 2.0;
+                        if (cache.surface.contains(QRectF(x - extent, y - extent, 2 * extent, 2 * extent)))
+                            tilePainter.drawEllipse(QPointF(x, y), radius, radius);
+                    }
+                }
+                tilePainter.end();
+                cache.tiles.insert(key, image);
+                tile = cache.tiles.constFind(key);
             }
+            painter.drawPixmap(QPointF(column * tileSize, row * tileSize) + origin, tile.value());
         }
     }
     painter.restore();
