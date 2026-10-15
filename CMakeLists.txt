@@ -26,8 +26,14 @@ set(LAYOUT_SOURCES
     src/CityLayoutView.h
     src/elements/CityLayoutElement.cpp
     src/elements/CityLayoutElement.h
-    src/elements/CityLayoutElements.cpp
-    src/elements/CityLayoutElements.h
+    src/elements/ElementCatalog.cpp
+    src/elements/ElementCatalog.h
+    src/elements/CityLayoutTrack.cpp
+    src/elements/CityLayoutTrack.h
+    src/elements/TrackRun.cpp
+    src/elements/TrackRun.h
+    src/CityLayoutElements.cpp
+    src/CityLayoutElements.h
     src/TableDefinition.cpp
     src/TableDefinition.h
     src/TableDefinitionEditorView.cpp
@@ -39,8 +45,6 @@ set(LAYOUT_SOURCES
     src/elements/LayoutElement.h
     src/elements/LayoutElementsView.cpp
     src/elements/LayoutElementsView.h
-
-
     src/UserSettings.cpp
     src/UserSettings.h
     src/SettingsDialog.cpp
@@ -52,24 +56,39 @@ set(LAYOUT_SOURCES
     src/elements/CurvedTrack.h
     src/elements/LeftSwitchTrack.cpp
     src/elements/LeftSwitchTrack.h
-    src/elements/BasePlate16x32Green.cpp
-    src/elements/BasePlate16x32Green.h
-    src/elements/BasePlate32x32Green.cpp
-    src/elements/BasePlate32x32Green.h
-    src/elements/BasePlate48x48Gray.cpp
-    src/elements/BasePlate48x48Gray.h
-    src/elements/TestPlate.cpp
-    src/elements/TestPlate.h
     src/elements/RightSwitchTrack.cpp
     src/elements/RightSwitchTrack.h
     src/elements/FlexTrack.cpp
     src/elements/FlexTrack.h
     resources.qrc
 )
+    # src/elements/BasePlate16x32.cpp
+    # src/elements/BasePlate16x32.h
+    # src/elements/BasePlate16x32DarkStoneGray.cpp
+    # src/elements/BasePlate16x32DarkStoneGray.h
+    # src/elements/BasePlate16x32Tan.cpp
+    # src/elements/BasePlate16x32Tan.h
+    # src/elements/BasePlate32x32Green.cpp
+    # src/elements/BasePlate32x32Green.h
+    # src/elements/BasePlate48x48Gray.cpp
+    # src/elements/BasePlate48x48Gray.h
 
 qt_add_executable(LegoCityLayout ${LAYOUT_SOURCES})
 
-target_include_directories(LegoCityLayout PRIVATE src)
+target_include_directories(LegoCityLayout PRIVATE src src/elements)
+target_compile_definitions(LegoCityLayout PRIVATE LEGO_PLATES_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/Elements/Plates")
+
+# Keep editable plate definitions next to packaged applications as well.
+if(APPLE)
+    set(ELEMENTS_RUNTIME_DIRECTORY "$<TARGET_BUNDLE_DIR:LegoCityLayout>/Contents/Resources/Elements")
+else()
+    set(ELEMENTS_RUNTIME_DIRECTORY "$<TARGET_FILE_DIR:LegoCityLayout>/Elements")
+endif()
+add_custom_target(copy_elements ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/Elements" "${ELEMENTS_RUNTIME_DIRECTORY}"
+    DEPENDS LegoCityLayout
+    VERBATIM
+)
 
 target_link_libraries(LegoCityLayout PRIVATE Qt6::Widgets Qt6::Svg)
 
@@ -84,13 +103,27 @@ install(TARGETS LegoCityLayout
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+if(APPLE)
+    install(DIRECTORY Elements DESTINATION "LegoCityLayout.app/Contents/Resources")
+else()
+    install(DIRECTORY Elements DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+
 option(LEGO_BUILD_TESTS "Build track connection integration checks" OFF)
 if(LEGO_BUILD_TESTS)
     enable_testing()
     set(TEST_LAYOUT_SOURCES ${LAYOUT_SOURCES})
     list(REMOVE_ITEM TEST_LAYOUT_SOURCES src/main.cpp)
     qt_add_executable(switch_connections_check tests/switch_connections.cpp ${TEST_LAYOUT_SOURCES})
-    target_include_directories(switch_connections_check PRIVATE src)
+    target_include_directories(switch_connections_check PRIVATE src src/elements)
+    target_compile_definitions(switch_connections_check PRIVATE LEGO_PLATES_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/Elements/Plates")
     target_link_libraries(switch_connections_check PRIVATE Qt6::Widgets Qt6::Svg)
     add_test(NAME switch_connections COMMAND switch_connections_check -platform offscreen)
+
+    qt_add_executable(missing_elements_check tests/missing_elements.cpp ${TEST_LAYOUT_SOURCES})
+    target_include_directories(missing_elements_check PRIVATE src src/elements)
+    get_target_property(APP_ELEMENT_DEFINITIONS LegoCityLayout COMPILE_DEFINITIONS)
+    target_compile_definitions(missing_elements_check PRIVATE ${APP_ELEMENT_DEFINITIONS})
+    target_link_libraries(missing_elements_check PRIVATE Qt6::Widgets Qt6::Svg)
+    add_test(NAME missing_elements COMMAND missing_elements_check -platform offscreen)
 endif()

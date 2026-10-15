@@ -64,6 +64,9 @@ private:
     void AddViews( QVBoxLayout* layout );
 
     bool confirmSaveCurrentProject();
+    bool writeLayout(const QString &path);
+    bool chooseLayoutFilename();
+    QString projectFilename() const;
     void refreshToolbar();
     void setCurrentWidget(QWidget *widget);
     QWidget *currentWidget() const;

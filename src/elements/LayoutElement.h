@@ -87,7 +87,7 @@ public:
 
 protected:
     virtual void initElementImage();
-    virtual QPixmap loadElementImage( const QString& resourcePath );
+    virtual QPixmap loadElementImage( const QString& resourcePath, qreal previewScale = 0.0 );
 
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;

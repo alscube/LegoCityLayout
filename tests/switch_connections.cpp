@@ -3,17 +3,24 @@
 #include "CityLayoutView.h"
 #include "elements/LayoutElementsView.h"
 #include "elements/StraightTrack.h"
+#include "elements/LeftSwitchTrack.h"
+#include "elements/RightSwitchTrack.h"
 #include <QLabel>
 #include <type_traits>
 #include "LoadedProjects.h"
 #include "ProjectView.h"
 #include "mainwindow.h"
+#include "UserSettings.h"
 #include "LegoGrid.h"
 #include <QApplication>
+#include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QSettings>
 #include <QTabWidget>
@@ -29,10 +36,17 @@
 static bool near(qreal a, qreal b) { return qAbs(a - b) < 1e-5; }
 
 #include "flex_checks.h"
+#include "track_run_checks.h"
+#include "zoom_checks.h"
+#include "compact_save_checks.h"
+#include "saved_track_angles_checks.h"
+#include "curve_grid_checks.h"
+#include "plate_info_checks.h"
 
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    if (const int failure=checkPlateInfo()) return failure;
     if (!checkPanningRendering()) return 45;
     // Keep the application's remembered layout path out of this check.
     QTemporaryDir temporary;
@@ -42,8 +56,13 @@ int main(int argc, char **argv)
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, temporary.path());
     auto &projects = LoadedProjects::instance();
+    if (const int failure=checkCurveGrid(projects)) return failure;
+    if (const int failure=checkCompactSave(projects)) return failure;
+    if (const int failure=checkSavedTrackAngles(projects)) return failure;
     const int index = projects.addProject("Switch checks");
     projects.setCurrentProjectIndex(index);
+    if (const int failure=checkZoom(projects)) return failure;
+    if (const int failure=checkTrackRun(projects)) return failure;
     CityLayoutView view;
     // The topmost element owns its entire tight selection rectangle, including
     // transparent mounting holes and gaps between sleepers/rails.
@@ -54,13 +73,13 @@ int main(int argc, char **argv)
         ":/images/LeftSwitchTrack.png",":/images/RightSwitchTrack.png",":/images/FlexTrack.png"};
     // Artwork and dimensions alone must not assign a track identity.
     for (int type=0;type<2;++type) {
-        const QSize size=type==0 ? QSize(8,16) : QSize(17,11);
+        const QSize size=type==0 ? QSize(16,8) : QSize(17,11);
         CityLayoutElement anonymous("Anonymous",QPixmap(trackPaths[type]),size,LegoGrid::pixelsPerStud);
         if (anonymous.isTrack() || !anonymous.resourcePath().isEmpty()
             || !anonymous.trackConnections().isEmpty()) return 24;
     }
     for (int type=0;type<5;++type) {
-        const QSize size=type==0 ? QSize(8,16) : type==1 ? QSize(17,11) : type==4 ? QSize(8,10) : QSize(24,36);
+        const QSize size=type==0 ? QSize(16,8) : type==1 ? QSize(17,11) : type==4 ? QSize(8,10) : QSize(36,24);
         CityLayoutElement top("Top",QPixmap(trackPaths[type]),size,LegoGrid::pixelsPerStud,1.0,nullptr,trackPaths[type]);
         CityLayoutElements layers;
         layers.append(&underlay);
@@ -91,7 +110,66 @@ int main(int argc, char **argv)
             }
         }
     }
-    const QSize switchSize(24, 36);
+    // A straight drops at zero degrees with a 16x8 footprint and left/right ports.
+    {
+        const QString resource = ":/images/StrightTrack.png";
+        QMimeData mime;
+        mime.setData("application/x-legocity-layout-element", resource.toUtf8());
+        mime.setData("application/x-legocity-layout-element-name", "Straight");
+        mime.setData("application/x-legocity-layout-element-size", QJsonDocument(QJsonObject{
+            {"widthStuds", 16}, {"heightStuds", 8}}).toJson(QJsonDocument::Compact));
+        QDragEnterEvent enter(QPoint(500,500), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&view, &enter);
+        QDropEvent drop(QPointF(500,500), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&view, &drop);
+        if (!drop.isAccepted() || projects.cityLayouts().size()!=1) return 48;
+        auto *placed = projects.cityLayouts().last();
+        const auto ports = placed->trackConnections();
+        const QRectF body = placed->footprintRect();
+        if (placed->plateSize()!=QSize(16,8) || !near(placed->rotationDegrees(),0)
+            || placed->sourcePixmap().toImage()!=QPixmap(resource).toImage()
+            || placed->width()<=placed->height() || ports.size()!=2
+            || !near(ports[0].p1().x(),body.left()) || !near(ports[1].p1().x(),body.right())
+            || !near(ports[0].p1().y(),body.center().y()) || !near(ports[1].p1().y(),body.center().y())
+            || ports[0].p2().x()>=ports[0].p1().x() || ports[1].p2().x()<=ports[1].p1().x()) return 49;
+        placed->setZoomFactor(12.0); // Resolve the hole interiors before checking alpha.
+        const QImage artwork = placed->pixmap().toImage();
+        // The three mounting holes follow the horizontal sleeper centers.
+        for (qreal fraction : {364.0/1344,674.0/1344,984.0/1344}) {
+            if (qAlpha(artwork.pixel(qRound(fraction * artwork.width()), artwork.height()/2))!=0) return 50;
+        }
+        projects.cityLayouts().deleteImage(placed);
+    }
+    // Dropping either switch must preserve the horizontal palette orientation.
+    for (const QString &resource : {QString(":/images/LeftSwitchTrack.png"), QString(":/images/RightSwitchTrack.png")}) {
+        QMimeData mime;
+        mime.setData("application/x-legocity-layout-element", resource.toUtf8());
+        mime.setData("application/x-legocity-layout-element-name", "Switch");
+        mime.setData("application/x-legocity-layout-element-size", QJsonDocument(QJsonObject{
+            {"widthStuds", 36}, {"heightStuds", 24}}).toJson(QJsonDocument::Compact));
+        QDragEnterEvent enter(QPoint(500,500), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&view, &enter);
+        QDropEvent drop(QPointF(500,500), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&view, &drop);
+        if (!drop.isAccepted() || projects.cityLayouts().size()!=1) return 46;
+        auto *placed = projects.cityLayouts().last();
+        const auto connections = placed->trackConnections();
+        const QPixmap rendered = placed->pixmap();
+        QImage expected(rendered.size(), QImage::Format_ARGB32_Premultiplied);
+        expected.fill(Qt::transparent);
+        QPainter reference(&expected);
+        reference.setRenderHint(QPainter::SmoothPixmapTransform);
+        const qreal pitch = LegoGrid::pixelsPerStud * projects.currentProject()->zoomFactor * rendered.devicePixelRatioF();
+        reference.drawPixmap(QRectF(0,0,36*pitch,24*pitch),QPixmap(resource),QRectF(QPixmap(resource).rect()));
+        reference.end();
+        if (placed->width() <= placed->height() || connections.size()!=3
+            || placed->plateSize()!=QSize(36,24) || !near(placed->rotationDegrees(),0)
+            || placed->sourcePixmap().toImage()!=QPixmap(resource).toImage()
+            || !near(connections[0].p1().y(), connections[1].p1().y())
+            || rendered.toImage()!=expected) return 47;
+        projects.cityLayouts().deleteImage(placed);
+    }
+    const QSize switchSize(36, 24);
     int checks = 0;
     // A switch plus a return curve ends 16 studs to the side and 48 studs
     // from its entrance, level with a straight attached to the through route.
@@ -101,16 +179,23 @@ int main(int argc, char **argv)
     for (const QString &resource : {QString(":/images/LeftSwitchTrack.png"), QString(":/images/RightSwitchTrack.png")}) {
         const QPixmap image(resource);
         if (image.isNull()) return 2;
-        auto *sw = new CityLayoutElement("Switch", image, switchSize, LegoGrid::pixelsPerStud, 1.0, &view, resource);
+        auto *sw = new CityLayoutElement(ElementCatalog::instance().byResource(resource)->name, image, switchSize, LegoGrid::pixelsPerStud, 1.0, &view, resource);
         projects.cityLayouts().append(sw);
         sw->move(200, 200);
         if (!sw->isSwitchTrack() || sw->trackConnections().size() != 3 || sw->rotationStepDegrees() != 22.5) return 3;
         const auto ports = sw->trackConnections();
-        const qreal pitch = sw->width() / 24.0;
-        const qreal pitchY = sw->height() / 36.0;
+        const qreal pitchX = LegoGrid::pixelsPerStud;
+        const qreal pitchY = LegoGrid::pixelsPerStud;
         const qreal sign = resource.contains("Right") ? 1 : -1;
-        if (!near((ports[1].p1().y()-ports[0].p1().y())/pitchY, 32.0)
-            || !near((ports[2].p1().x()-ports[0].p1().x())/pitch, sign*LegoGrid::switchBranchOffsetStuds)) return 4;
+        const qreal entranceX = sign > 0 ? 1.0 : 35.0;
+        if (!near(ports[0].p1().x()/pitchX, entranceX)
+            || !near(ports[0].p1().y()/pitchY, 20.0)
+            || !near((ports[1].p1().x()-ports[0].p1().x())/pitchX, sign*32.0)
+            || !near(ports[1].p1().y(), ports[0].p1().y())
+            || !near((ports[2].p1().x()-ports[0].p1().x())/pitchX, sign*LegoGrid::switchBranchLengthStuds)
+            || !near((ports[2].p1().y()-ports[0].p1().y())/pitchY, -LegoGrid::switchBranchOffsetStuds)
+            || (ports[0].p2().x()-ports[0].p1().x())*sign >= 0
+            || (ports[1].p2().x()-ports[1].p1().x())*sign <= 0) return 4;
         // Every end, both hands, every 22.5-degree rotation, multiple zoom levels.
         for (qreal zoom : {1.875, 4.0, 8.0}) {
             projects.currentProject()->zoomFactor = zoom;
@@ -118,7 +203,7 @@ int main(int argc, char **argv)
             std::array<std::unique_ptr<CityLayoutElement>, 32> movingTracks;
             for (int type=0; type<2; ++type) for (int turn=0; turn<16; ++turn) {
                 const QString path=type ? ":/images/CurvedTrack.png" : ":/images/StrightTrack.png";
-                auto track=std::make_unique<CityLayoutElement>("Track",QPixmap(path),type ? QSize(17,11) : QSize(8,16),
+                auto track=std::make_unique<CityLayoutElement>("Track",QPixmap(path),type ? QSize(17,11) : QSize(16,8),
                     LegoGrid::pixelsPerStud,zoom,nullptr,path);
                 track->rotateByDegrees(turn*22.5);
                 movingTracks[type*16+turn]=std::move(track);
@@ -128,22 +213,22 @@ int main(int argc, char **argv)
                     for (bool curved : {false, true}) {
                         const QPointF direction = target.p2()-target.p1();
                         const qreal targetAngle=qRadiansToDegrees(std::atan2(direction.y(),direction.x()));
-                        const int turn=(qRound((targetAngle+180-(curved ? 180 : -90))/22.5)%16+16)%16;
+                        const int turn=(qRound(targetAngle/22.5)%16+16)%16;
                         CityLayoutElement &moving=*movingTracks[(curved ? 16 : 0)+turn];
                         const QLineF movingPort=moving.trackConnections().first();
-                        const QPointF ideal=QPointF(sw->pos())+target.p1()-movingPort.p1();
+                        const QPointF ideal=sw->layoutPosition()+target.p1()-movingPort.p1();
                         const QPoint requested=ideal.toPoint()+QPoint(3,-2);
-                        const QPoint snapped=view.snappedPosition(requested,&moving);
-                        if (QLineF(QPointF(snapped)+movingPort.p1(),QPointF(sw->pos())+target.p1()).length() > 0.75) {
+                        const QPointF snapped=view.snappedPosition(requested,&moving);
+                        if (QLineF(QPointF(snapped)+movingPort.p1(),sw->layoutPosition()+target.p1()).length() > 0.75) {
                             qCritical() << "Snap failed" << resource << zoom << step << curved << target << snapped << ideal;
                             return 5;
                         }
                         // Exercise dragging the switch onto an existing track as well.
                         projects.cityLayouts().removeAll(sw);
-                        moving.move(snapped);
+                        moving.setLayoutPosition(snapped);
                         projects.cityLayouts().append(&moving);
-                        const QPoint reversed=view.snappedPosition(sw->pos()+QPoint(3,-2),sw);
-                        if (QLineF(QPointF(reversed)+target.p1(),QPointF(moving.pos())+moving.trackConnections().first().p1()).length()>0.75) return 6;
+                        const QPointF reversed=view.snappedPosition(sw->pos()+QPoint(3,-2),sw);
+                        if (QLineF(QPointF(reversed)+target.p1(),moving.layoutPosition()+moving.trackConnections().first().p1()).length()>0.75) return 6;
                         projects.cityLayouts().removeAll(&moving);
                         projects.cityLayouts().append(sw);
                         ++checks;
@@ -158,63 +243,82 @@ int main(int argc, char **argv)
     const QString straightResource=":/images/StrightTrack.png";
     const QPixmap horizontalStraight(straightResource);
     if (horizontalStraight.size()!=QSize(1377,1142)) return 42;
-    auto *legacyStraight=new CityLayoutElement("Existing straight",horizontalStraight.transformed(QTransform().rotate(-90)),
-        QSize(8,16),LegoGrid::pixelsPerStud,projects.currentProject()->zoomFactor,&view,straightResource);
-    auto *newStraight=new CityLayoutElement("New straight",horizontalStraight,
-        QSize(8,16),LegoGrid::pixelsPerStud,projects.currentProject()->zoomFactor,&view,straightResource);
-    newStraight->rotateByDegrees(90);
-    legacyStraight->move(2000,1000);
+    auto *verticalStraight=new CityLayoutElement("Straight Track",horizontalStraight,
+        QSize(16,8),LegoGrid::pixelsPerStud,projects.currentProject()->zoomFactor,&view,straightResource);
+    auto *newStraight=new CityLayoutElement("Straight Track",horizontalStraight,
+        QSize(16,8),LegoGrid::pixelsPerStud,projects.currentProject()->zoomFactor,&view,straightResource);
+    verticalStraight->rotateByDegrees(90);
+    verticalStraight->move(2000,1000);
     newStraight->move(2300,1000);
-    projects.cityLayouts().append(legacyStraight);
+    projects.cityLayouts().append(verticalStraight);
     projects.cityLayouts().append(newStraight);
-    const auto legacyPorts=legacyStraight->trackConnections();
+    const auto verticalPorts=verticalStraight->trackConnections();
     const auto horizontalPorts=newStraight->trackConnections();
     // The third connector and handedness survive the real JSON save/load path.
+    const std::array<QList<QLineF>,2> switchPorts{projects.cityLayouts().at(0)->trackConnections(),
+                                               projects.cityLayouts().at(1)->trackConnections()};
     const QJsonObject saved=view.savedLayout();
     const auto savedElements=saved.value("elements").toArray();
     const QString path=temporary.filePath("switches.LegoLayout");
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly)) return 7;
-    file.write(QJsonDocument(QJsonObject{{"format","LegoCityLayout.TableDefinition"},{"version",1},
+    file.write(QJsonDocument(QJsonObject{{"format","LegoCityLayout.TableDefinition"},{"version",2},
         {"layoutName","Restored switches"},{"surfaces",QJsonArray()},{"openSides",QJsonArray()},{"cityLayout",saved}}).toJson());
     file.close();
     ProjectView projectView;
     if (!projectView.openLayout(path) || projects.cityLayouts().size()!=5) return 8;
+    if (projects.currentProject()->filePath!=QFileInfo(path).absoluteFilePath()) return 110;
     for (int i=0;i<2;++i) {
         const auto *sw=projects.cityLayouts().at(i);
         if (!sw->isSwitchTrack() || sw->trackConnections().size()!=3
-            || sw->resourcePath()!=savedElements[i].toObject().value("resourcePath").toString()
+            || sw->resourcePath()!=QString(i==0 ? ":/images/LeftSwitchTrack.png" : ":/images/RightSwitchTrack.png")
             || !near(sw->rotationDegrees(),savedElements[i].toObject().value("rotationDegrees").toDouble())) return 9;
         if (sw->containsPoint(QPoint(-1,-1))) return 10;
+        if (sw->plateSize()!=QSize(36,24)) return 51;
+        const auto restoredPorts = sw->trackConnections();
+        for (int port=0;port<3;++port) {
+            if (QLineF(restoredPorts[port].p1(),switchPorts[i][port].p1()).length()>1e-6
+                || QLineF(restoredPorts[port].p2(),switchPorts[i][port].p2()).length()>1e-6) return 52;
+        }
     }
     const auto *restoredFlex=projects.cityLayouts().at(2);
     if (!restoredFlex->isFlexTrack() || restoredFlex->trackConnections().size()!=2
         || !near(restoredFlex->flexBendDegrees(),1.25) || !near(restoredFlex->rotationDegrees(),11.25)) return 35;
-    const auto *reopenedLegacy=projects.cityLayouts().at(3);
+    const auto *reopenedVertical=projects.cityLayouts().at(3);
     const auto *reopenedHorizontal=projects.cityLayouts().at(4);
-    if (!near(reopenedLegacy->rotationDegrees(),0) || reopenedLegacy->height()<=reopenedLegacy->width()
-        || !near(reopenedHorizontal->rotationDegrees(),90) || reopenedHorizontal->width()<=reopenedHorizontal->height()) return 43;
+    if (!near(reopenedVertical->rotationDegrees(),90) || reopenedVertical->height()<=reopenedVertical->width()
+        || !near(reopenedHorizontal->rotationDegrees(),0) || reopenedHorizontal->width()<=reopenedHorizontal->height()) return 43;
     for (int end=0;end<2;++end) {
-        if (QLineF(legacyPorts[end].p1(),reopenedLegacy->trackConnections()[end].p1()).length()>1e-6
+        if (QLineF(verticalPorts[end].p1(),reopenedVertical->trackConnections()[end].p1()).length()>1e-6
             || QLineF(horizontalPorts[end].p1(),reopenedHorizontal->trackConnections()[end].p1()).length()>1e-6) return 44;
     }
     // An 8x16 plate remains a plate, and both switches appear in the palette.
-    CityLayoutElement plate("Plate", QPixmap(":/images/BasePlate16x32Green.png"), QSize(8,16), LegoGrid::pixelsPerStud,
+    CityLayoutElement plate("Plate", QPixmap(":/images/BasePlate16x32.png"), QSize(8,16), LegoGrid::pixelsPerStud,
                             1.0,nullptr,":/images/BasePlate8x16Green.png");
     if (plate.isTrack() || !plate.trackConnections().isEmpty() || plate.rotationStepDegrees()!=90) return 11;
     LayoutElementsView palette;
     palette.addLayoutElements();
     auto *tabs=palette.findChild<QTabWidget *>("layoutElementsTabs");
-    if (!tabs || tabs->widget(2)->findChildren<QWidget *>("layoutElementWidget").size()!=5) return 12;
+    QWidget *trackPage=nullptr;
+    if (tabs) for (int i=0;i<tabs->count();++i)
+        if (tabs->tabText(i)=="Tracks") trackPage=tabs->widget(i);
+    if (!trackPage || trackPage->findChildren<QWidget *>("layoutElementWidget").size()!=5) return 12;
     static_assert(std::is_base_of<LayoutElement,StraightTrack>::value);
     StraightTrack *straightPalette=nullptr;
-    for (auto *widget : tabs->widget(2)->findChildren<QWidget *>("layoutElementWidget")) {
+    int switchPaletteCount=0;
+    for (auto *widget : trackPage->findChildren<QWidget *>("layoutElementWidget")) {
         if (auto *straight=dynamic_cast<StraightTrack *>(widget)) straightPalette=straight;
+        if (dynamic_cast<LeftSwitchTrack *>(widget) || dynamic_cast<RightSwitchTrack *>(widget)) {
+            const auto *element=dynamic_cast<LayoutElement *>(widget);
+            if (element->plateSize()!=QSize(36,24)) return 53;
+            ++switchPaletteCount;
+        }
     }
-    if (!straightPalette || straightPalette->plateSize()!=QSize(8,16)) return 40;
+    if (switchPaletteCount!=2) return 54;
+    if (!straightPalette || straightPalette->plateSize()!=QSize(16,8)) return 40;
     class ReferenceElement final : public LayoutElement {
     public:
-        ReferenceElement() : LayoutElement("Reference",":/images/StrightTrack.png",QSize(8,16)) {
+        ReferenceElement() : LayoutElement("Reference",":/images/StrightTrack.png",QSize(16,8)) {
             initElementImage();
         }
     };
@@ -227,7 +331,7 @@ int main(int argc, char **argv)
     };
     if (imageSize(*straightPalette)!=imageSize(fullSize)*0.50) return 41;
     palette.resize(210,800);
-    tabs->setCurrentIndex(2);
+    tabs->setCurrentWidget(trackPage);
     palette.show();
     app.processEvents();
     palette.grab().save("switch-palette-preview.png");
@@ -243,6 +347,7 @@ int main(int argc, char **argv)
         };
         auto *editor=window.findChild<ProjectView *>();
         if (!editor) return 18;
+        UserSettings::instance().setLayoutSaveDirectory(QString());
         editor->startProject("Close checks");
         if (!requestClose()) return 19; // Unchanged layout closes without a prompt.
         ++projects.currentProject()->changeRevision;
@@ -252,14 +357,16 @@ int main(int argc, char **argv)
         int dialogs=0;
         auto choice=QMessageBox::Cancel;
         bool saveFile=false;
+        bool automaticOverwrite=false;
         QObject::connect(&responder,&QTimer::timeout,[&] {
             if (auto *box=qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
                 ++prompts;
                 box->button(choice)->click();
             } else if (auto *dialog=qobject_cast<QFileDialog *>(QApplication::activeModalWidget())) {
                 ++dialogs;
+                automaticOverwrite=dialog->testOption(QFileDialog::DontConfirmOverwrite);
                 if (saveFile) {
-                    dialog->selectFile(temporary.filePath("saved-on-close.LegoLayout"));
+                    dialog->selectFile(temporary.filePath("Close checks.LegoLayout"));
                     QMetaObject::invokeMethod(dialog,"accept",Qt::DirectConnection);
                 } else dialog->reject();
             }
@@ -267,9 +374,26 @@ int main(int argc, char **argv)
         responder.start();
         if (requestClose() || prompts!=1 || projects.projectCount()!=1) return 20;
         choice=QMessageBox::Save;
-        if (requestClose() || dialogs!=1 || projects.projectCount()!=1) return 21;
+        if (requestClose() || dialogs!=1 || projects.projectCount()!=1 || !automaticOverwrite) return 21;
         saveFile=true;
-        if (!requestClose() || !QFile::exists(temporary.filePath("saved-on-close.LegoLayout"))) return 22;
+        if (!requestClose() || !QFile::exists(temporary.filePath("Close checks.LegoLayout"))) return 22;
+        if (UserSettings::instance().layoutSaveDirectory()!=temporary.path()) return 114;
+        const int previousDialogs=dialogs;
+        projects.currentProject()->setTitle("Saved again on close");
+        ++projects.currentProject()->changeRevision;
+        if (!requestClose() || dialogs!=previousDialogs) return 111;
+        QFile overwritten(temporary.filePath("Saved again on close.LegoLayout"));
+        if (!overwritten.open(QIODevice::ReadOnly)
+            || QJsonDocument::fromJson(overwritten.readAll()).object().value("layoutName")!="Saved again on close") return 112;
+        if (projects.currentProject()->filePath!=QFileInfo(overwritten.fileName()).absoluteFilePath()) return 113;
+        ++projects.currentProject()->changeRevision;
+        if (!requestClose() || dialogs!=previousDialogs) return 115;
+        editor->startProject("Auto named new layout");
+        ++projects.currentProject()->changeRevision;
+        if (!editor->saveTableDefinition() || dialogs!=previousDialogs
+            || !QFile::exists(temporary.filePath("Auto named new layout.LegoLayout"))) return 116;
+        projects.removeProject(projects.currentProjectIndex());
+        editor->setCurrentProjectIndex(0);
         const int previousPrompts=prompts;
         if (!requestClose() || prompts!=previousPrompts) return 23; // Saved layouts stay clean.
         ++projects.currentProject()->changeRevision;

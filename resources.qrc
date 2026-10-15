@@ -1,13 +1,5 @@
 <RCC>
     <qresource prefix="/images">
-        <file alias="BasePlate16x32Green.png">resources/BasePlate16x32Green.png</file>
-        <file alias="BasePlate32x32Green.png">resources/BasePlate32x32Green.png</file>
-        <file alias="BasePlate32x32Blue.png">resources/BasePlate32x32Blue.png</file>
-        <file alias="BasePlate32x32Tan.png">resources/BasePlate32x32Tan.png</file>
-        <file alias="BasePlate32x32White.png">resources/BasePlate32x32White.png</file>
-        <file alias="BasePlate48x48Gray.png">resources/BasePlate48x48Gray.png</file>
-        <file alias="TestPlate.png">resources/TestPlate.png</file>
-        <file alias="TownHall.png">resources/TownHall.png</file>
         <file alias="StrightTrack.png">resources/StrightTrack.png</file>
         <file alias="CurvedTrack.png">resources/CurvedTrack.png</file>
         <file alias="LeftSwitchTrack.png">resources/LeftSwitchTrack.png</file>

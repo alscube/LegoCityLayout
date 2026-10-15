@@ -1,0 +1,188 @@
+{
+    "cityLayout": {
+        "elements": [
+            {
+                "name": "BasePlate32x32Green",
+                "rotationDegrees": 0,
+                "x": 319,
+                "y": 201
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 0,
+                "x": 557,
+                "y": 443
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 22.65329257274189,
+                "x": 605,
+                "y": 454
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 45.17860226472351,
+                "x": 646,
+                "y": 489
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 67.6927421361811,
+                "x": 674,
+                "y": 542
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 90.33295434650842,
+                "x": 685,
+                "y": 605
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 112.85147426709995,
+                "x": 649,
+                "y": 653
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 135.35867166864313,
+                "x": 600,
+                "y": 694
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 157.88745261335623,
+                "x": 545,
+                "y": 722
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 180.5722920929482,
+                "x": 492,
+                "y": 732
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 202.99621483781218,
+                "x": 434,
+                "y": 696
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 225.49056191235982,
+                "x": 395,
+                "y": 647
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 248.03031189707852,
+                "x": 382,
+                "y": 592
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 270.4359036027764,
+                "x": 395,
+                "y": 539
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 292.91350181834076,
+                "x": 407,
+                "y": 481
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 315.415153326194,
+                "x": 442,
+                "y": 442
+            },
+            {
+                "name": "Curved Track (22.5°)",
+                "rotationDegrees": 337.94860633823976,
+                "x": 495,
+                "y": 429
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 343,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 403,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 463,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 523,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 583,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 643,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 703,
+                "y": 371
+            },
+            {
+                "name": "Straight Track",
+                "rotationDegrees": 0,
+                "x": 763,
+                "y": 371
+            }
+        ],
+        "gridOriginX": 77.04484479359252,
+        "gridOriginY": 80.08061112712096,
+        "zoomFactor": 1.8749999999999998
+    },
+    "coordinateUnits": "canvas",
+    "format": "LegoCityLayout.TableDefinition",
+    "layoutName": "test",
+    "openSides": [
+    ],
+    "surfaces": [
+        {
+            "name": "Table surface",
+            "outline": [
+                {
+                    "x": 197.98972668335625,
+                    "y": 201.0254930168844
+                },
+                {
+                    "x": 923.659018021939,
+                    "y": 201.0254930168844
+                },
+                {
+                    "x": 923.659018021939,
+                    "y": 926.6947843554672
+                },
+                {
+                    "x": 197.98972668335625,
+                    "y": 926.6947843554672
+                }
+            ]
+        }
+    ],
+    "version": 2
+}

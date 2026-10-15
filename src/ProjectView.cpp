@@ -33,6 +33,7 @@
 #include "LoadedProjects.h"
 #include "CityLayoutView.h"
 #include "elements/CityLayoutElement.h"
+#include "elements/ElementCatalog.h"
 #include "OpenOrCreateProjectView.h"
 #include "TableDefinitionEditorView.h"
 
@@ -40,6 +41,7 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFile>
+#include <QStringList>
 #include <QTransform>
 #include <cmath>
 #include <QFileInfo>
@@ -299,35 +301,61 @@ void ProjectView::showCityLayout()
 
 bool ProjectView::saveTableDefinition()
 {
-    QString projectTitle = _Projects.title();
-    if (projectTitle.isEmpty()) {
+    if (_Projects.title().isEmpty()) {
         QMessageBox::information(this, tr("Save Table Definition"),
                                  tr("Create a layout before saving its table definition."));
         return false;
     }
+    const QString existingPath = _Projects.currentProject()->filePath;
+    const QString directory = existingPath.isEmpty() ? UserSettings::instance().layoutSaveDirectory()
+        : QFileInfo(existingPath).absolutePath();
+    if (directory.isEmpty() || !QDir(directory).exists()) return chooseLayoutFilename();
+    return writeLayout(QDir(directory).filePath(projectFilename()));
+}
 
-    QSettings settings;
-    const QString directory = settings.value(QStringLiteral("tableDefinition/saveDirectory"),
-        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).toString();
-
-    QString filename = projectTitle.trimmed();
+QString ProjectView::projectFilename() const
+{
+    QString filename = _Projects.title().trimmed();
     filename.replace(QRegularExpression(QStringLiteral("[<>:\\x22/\\\\|?*\\x00-\\x1f]")), QStringLiteral("_"));
     filename.remove(QRegularExpression(QStringLiteral("[. ]+$")));
     if (filename.isEmpty()) {
         filename = QStringLiteral("Layout");
     }
+    if (!filename.endsWith(QStringLiteral(".LegoLayout"), Qt::CaseInsensitive))
+        filename += QStringLiteral(".LegoLayout");
+    return filename;
+}
+
+bool ProjectView::chooseLayoutFilename()
+{
+    const QString remembered = UserSettings::instance().layoutSaveDirectory();
+    const QString directory = QDir(remembered).exists() && !remembered.isEmpty() ? remembered
+        : QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QFileDialog dialog(this, tr("Save Lego Layout"));
     dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setOption(QFileDialog::DontConfirmOverwrite, true);
     dialog.setFileMode(QFileDialog::AnyFile);
     dialog.setNameFilter(tr("Lego Layouts (*.LegoLayout)"));
     dialog.setDefaultSuffix(QStringLiteral("LegoLayout"));
     dialog.setDirectory(directory);
-    dialog.selectFile(filename + QStringLiteral(".LegoLayout"));
+    dialog.selectFile(projectFilename());
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) {
         return false;
     }
     const QString path = dialog.selectedFiles().first();
+    const QString originalTitle = _Projects.title();
+    // An explicitly edited filename becomes the project name for subsequent saves.
+    if (QFileInfo(path).fileName() != projectFilename())
+        _Projects.currentProject()->setTitle(QFileInfo(path).completeBaseName());
+    if (writeLayout(path)) return true;
+    _Projects.currentProject()->setTitle(originalTitle);
+    return false;
+}
 
+bool ProjectView::writeLayout(const QString &path)
+{
+    const QString projectTitle = _Projects.title();
+    QSettings settings;
     const auto pointJson = [](const QPointF &point) {
         return QJsonObject{{QStringLiteral("x"), point.x()},
                            {QStringLiteral("y"), point.y()}};
@@ -348,15 +376,19 @@ bool ProjectView::saveTableDefinition()
         openSides.append(QJsonObject{{QStringLiteral("start"), pointJson(side.p1())},
                                      {QStringLiteral("end"), pointJson(side.p2())}});
     }
+    // for (const auto *element : _Projects.cityLayouts()) {
+    //     if (!ElementCatalog::instance().byResource(element->resourcePath())) {
+    //         QMessageBox::critical(this, tr("Could Not Save Layout"),
+    //                               tr("Unknown element type: %1").arg(element->name()));
+    //         return false;
+    //     }
+    // }
+
     const QJsonDocument document(QJsonObject{
         {QStringLiteral("format"), QStringLiteral("LegoCityLayout.TableDefinition")},
-        {QStringLiteral("version"), 1},
+        {QStringLiteral("version"), 2},
         {QStringLiteral("layoutName"), projectTitle},
         {QStringLiteral("coordinateUnits"), QStringLiteral("canvas")},
-        {QStringLiteral("gridSpacing"), LegoGrid::plateSpacing},
-        {QStringLiteral("gridSizeInches"), LegoGrid::studPitchMillimeters * LegoGrid::plateStuds / LegoGrid::millimetersPerInch},
-        {QStringLiteral("gridSizeCentimeters"), LegoGrid::studPitchMillimeters * LegoGrid::plateStuds / 10.0},
-        {QStringLiteral("studPitchMillimeters"), LegoGrid::studPitchMillimeters},
         {QStringLiteral("surfaces"), surfaces},
         {QStringLiteral("openSides"), openSides},
         {QStringLiteral("cityLayout"), m_cityLayoutView->savedLayout()}});
@@ -368,9 +400,10 @@ bool ProjectView::saveTableDefinition()
                                   .arg(QDir::toNativeSeparators(path), file.errorString()));
         return false;
     }
+    _Projects.currentProject()->filePath = QFileInfo(path).absoluteFilePath();
     _Projects.currentProject()->savedTableState = tableState();
     _Projects.currentProject()->savedLayoutRevision = m_cityLayoutView->changeRevision();
-    settings.setValue(QStringLiteral("tableDefinition/saveDirectory"), QFileInfo(path).absolutePath());
+    UserSettings::instance().setLayoutSaveDirectory(QFileInfo(path).absolutePath());
     settings.setValue(QStringLiteral("layout/lastPath"), QFileInfo(path).absoluteFilePath());
     if (auto *mainWindow = qobject_cast<QMainWindow *>(window())) {
         mainWindow->statusBar()->showMessage(
@@ -415,7 +448,7 @@ bool ProjectView::openLayout(const QString &path)
     if (error.error != QJsonParseError::NoError) return fail(error.errorString());
     const QJsonObject root = document.object();
     if (root.value("format").toString() != QStringLiteral("LegoCityLayout.TableDefinition")
-        || root.value("version").toInt() != 1
+        || root.value("version").toInt() != 2
         || root.value("layoutName").toString().trimmed().isEmpty()
         || !root.value("surfaces").isArray() || !root.value("openSides").isArray())
         return fail(tr("Unsupported or invalid layout file."));
@@ -458,42 +491,71 @@ bool ProjectView::openLayout(const QString &path)
         || (root.contains("cityLayout") && (!root.value("cityLayout").isObject()
             || !city.value("elements").isArray())))
         return fail(tr("Invalid city layout."));
-    struct Plate { QString name; QString resourcePath; QPixmap image; QSize size; QPoint position; qreal rotation; qreal flexBend; int imageGeometryVersion; };
+
+    struct Plate { QString name; QString resourcePath; QPixmap image; QSize size; QPointF position; qreal rotation; qreal flexBend; };
     QList<Plate> plates;
-    for (const auto &value : city.value("elements").toArray()) {
-        const auto element = value.toObject();
+    QStringList missingTypes;
+    int missingCount = 0;
+    for (const auto &value : city.value("elements").toArray())
+    {
+        QJsonObject element = value.toObject();
         Plate plate;
         plate.name = element.value("name").toString();
-        plate.resourcePath = element.value("resourcePath").toString();
-        plate.size = QSize(element.value("widthStuds").toInt(), element.value("heightStuds").toInt());
+        if (plate.name.trimmed().isEmpty()) return fail(tr("Invalid city element."));
+        const auto *definition = ElementCatalog::instance().byName(plate.name);
+        if (!definition) {
+            ++missingCount;
+            if (!missingTypes.contains(plate.name)) missingTypes.append(plate.name);
+            continue;
+        }
+        plate.name = definition->name;
+        plate.resourcePath = definition->resourcePath;
+        plate.size = definition->size;
+        plate.image.load(plate.resourcePath);
         QPointF position;
         if (!readPoint(value, position) || qAbs(position.x()) > 10000000 || qAbs(position.y()) > 10000000)
             return fail(tr("Invalid plate position."));
-        plate.position = position.toPoint();
+        plate.position = position;
         plate.rotation = element.value("rotationDegrees").toDouble(-1);
+
         if (element.contains("flexBendDegrees") && !element.value("flexBendDegrees").isDouble())
             return fail(tr("Invalid flex track bend."));
+
         plate.flexBend = element.value("flexBendDegrees").toDouble(0.0);
-        plate.imageGeometryVersion = element.value("imageGeometryVersion").toInt(0);
-        if (plate.size.width() <= 0 || plate.size.height() <= 0
-            || !std::isfinite(plate.rotation) || plate.rotation < 0 || plate.rotation >= 360
-            || !plate.image.loadFromData(QByteArray::fromBase64(
-                element.value("imagePngBase64").toString().toLatin1()), "PNG"))
-            return fail(tr("Invalid city plate."));
-        // New files keep unrotated artwork to avoid padding/resampling on reopen.
-        // Older files store the displayed orientation.
-        if (!element.value("imageIsUnrotated").toBool(false)) {
-            plate.image = plate.image.transformed(QTransform().rotate(-plate.rotation));
-        }
+
+        if (!std::isfinite(plate.rotation) || plate.rotation < 0 || plate.rotation >= 360 || plate.image.isNull())
+            return fail(tr("Invalid city element."));
+
         const CityLayoutElement identity(plate.name, plate.image, plate.size,
                                          LegoGrid::pixelsPerStud, 1.0, nullptr, plate.resourcePath);
+
         if (!std::isfinite(plate.flexBend) || qAbs(plate.flexBend) > LegoGrid::flexMaximumBendDegrees
             || (!identity.isFlexTrack() && !qFuzzyIsNull(plate.flexBend)))
             return fail(tr("Invalid flex track bend."));
-        const qreal rotationStep = identity.rotationStepDegrees();
-        if (qAbs(plate.rotation / rotationStep - qRound(plate.rotation / rotationStep)) > 1e-9)
-            return fail(tr("Invalid city plate."));
+
+        // Track connections can align pieces between the manual rotation steps.
+        // Preserve those saved angles; only baseplates require quarter turns.
+        if (!identity.isTrack()) {
+            const qreal rotationStep = identity.rotationStepDegrees();
+            const qreal rotationOffset = qAbs(plate.rotation / rotationStep - qRound(plate.rotation / rotationStep));
+            if (rotationOffset > 1e-9)
+                return fail(tr("Invalid city plate."));
+        }
+
         plates.append(plate);
+    }
+
+    // Validate available elements before asking, and commit no project state
+    // until the user has accepted opening without every missing placement.
+    if (missingCount > 0) {
+        const auto choice = QMessageBox::warning(
+            this, tr("Missing Elements"),
+            tr("%n saved element(s) are missing from the element catalog:", nullptr, missingCount)
+                + QStringLiteral("\n\n") + missingTypes.join(QStringLiteral("\n"))
+                + tr("\n\nIf you save this layout, the missing elements will be omitted."
+                     "\n\nContinue opening this layout without these elements?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (choice != QMessageBox::Yes) return false;
     }
 
     const int index = _Projects.addProject(root.value("layoutName").toString());
@@ -506,27 +568,11 @@ bool ProjectView::openLayout(const QString &path)
         auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, LegoGrid::pixelsPerStud, zoom, m_cityLayoutView, plate.resourcePath);
         element->setFlexBendDegrees(plate.flexBend);
         element->rotateByDegrees(plate.rotation);
-        // Legacy tracks used the padded canvas as their stud-aligned origin.
-        // Keep that intended origin when adopting the calibrated body bounds.
-        QPointF artworkOffset = plate.imageGeometryVersion < 1
-            ? element->footprintRect().topLeft() : QPointF();
-        if (plate.imageGeometryVersion == 1 && plate.size == QSize(17, 11)
-            && !element->trackConnections().isEmpty()) {
-            // Version 1 curves had one extra stud above and below the artwork.
-            // Preserve the body's global origin at every rotation and zoom.
-            const qreal pitch = LegoGrid::pixelsPerStud;
-            const QTransform rotation = QTransform().rotate(plate.rotation);
-            const QRectF oldBounds = rotation.mapRect(QRectF(0, 0, 19 * pitch, 13 * pitch));
-            QRectF oldFootprint = rotation.mapRect(QRectF(pitch, pitch, 17 * pitch, 11 * pitch));
-            oldFootprint.translate(-oldBounds.topLeft());
-            const QPointF oldOrigin(oldFootprint.x() * qRound(oldBounds.width() * zoom) / oldBounds.width(),
-                                    oldFootprint.y() * qRound(oldBounds.height() * zoom) / oldBounds.height());
-            artworkOffset = element->footprintRect().topLeft() - oldOrigin;
-        }
-        element->move((QPointF(plate.position) - artworkOffset).toPoint());
+        element->setLayoutPosition(plate.position);
         project->cityLayouts.append(element);
     }
     setCurrentProjectIndex(index);
+    project->filePath = QFileInfo(path).absoluteFilePath();
     project->savedTableState = tableState();
     project->savedLayoutRevision = m_cityLayoutView->changeRevision();
     QSettings settings;
@@ -546,10 +592,8 @@ bool ProjectView::confirmSaveCurrentProject()
             tr("Save changes to \"%1\" before closing?").arg(projectTitle),
             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
             QMessageBox::Save);
-        if (choice == QMessageBox::Cancel
-            || (choice == QMessageBox::Save && !saveTableDefinition())) {
-            return false;
-        }
+        if (choice == QMessageBox::Cancel) return false;
+        if (choice == QMessageBox::Save && !saveTableDefinition()) return false;
     }
 
     return true;

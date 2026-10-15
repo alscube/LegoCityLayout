@@ -20,8 +20,12 @@
 #include <QPoint>
 #include <QJsonObject>
 #include <QWidget>
+#include <QTimer>
+#include <QPixmap>
+#include <QPainterPath>
 
 class LoadedProjects;
+class ProjectData;
 class QDragEnterEvent;
 class QDropEvent;
 class QContextMenuEvent;
@@ -40,7 +44,7 @@ public:
     explicit CityLayoutView(QWidget *parent = nullptr);
 
     void activateProject();
-    QPoint snappedPosition(const QPoint &position,
+    QPointF snappedPosition(const QPointF &position,
                            const CityLayoutElement *movingElement = nullptr) const;
     QPointF projectPoint(const QPointF &point) const;
     QJsonObject savedLayout() const;
@@ -78,4 +82,14 @@ private:
     QPoint m_lastPanPosition;
     bool m_mouseDragged = false;
     bool m_isPanning = false;
+    QTimer m_zoomTimer;
+    QPointF m_zoomAnchor;
+    qreal m_requestedZoom = 1.0;
+    ProjectData *m_zoomProject = nullptr;
+    QPixmap m_studLayer;
+    QRect m_studLayerRect;
+    QPainterPath m_studSurface;
+    QPointF m_studOrigin;
+    qreal m_studZoom = 0.0;
+    ProjectData *m_studProject = nullptr;
 };

@@ -27,5 +27,5 @@ public:
     explicit FlexTrack(QWidget *parent = nullptr);
 
 protected:
-    QPixmap loadElementImage( const QString& resourcePath ) override;
+    QPixmap loadElementImage( const QString& resourcePath, qreal previewScale ) override;
 };

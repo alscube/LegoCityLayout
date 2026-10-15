@@ -4,7 +4,7 @@ static int checkFlexTrack(CityLayoutView &view, LoadedProjects &projects)
 {
     const qreal originalZoom=projects.currentProject()->zoomFactor;
     const QString path=":/images/FlexTrack.png";
-    auto *flex=new CityLayoutElement("Flex",QPixmap(path),QSize(8,10),LegoGrid::pixelsPerStud,
+    auto *flex=new CityLayoutElement("Flex Track",QPixmap(path),QSize(8,10),LegoGrid::pixelsPerStud,
                                      originalZoom,&view,path);
     projects.cityLayouts().append(flex);
     if (!flex->isFlexTrack() || flex->trackConnections().size()!=2 || flex->rotationStepDegrees()!=5.625) return 30;
@@ -16,7 +16,7 @@ static int checkFlexTrack(CityLayoutView &view, LoadedProjects &projects)
         projects.currentProject()->zoomFactor=zoom;
         flex->setZoomFactor(zoom);
         for (int type=0;type<5;++type) {
-            const QSize size=type==0 ? QSize(8,16) : type==1 ? QSize(17,11) : type==4 ? QSize(8,10) : QSize(24,36);
+            const QSize size=type==0 ? QSize(16,8) : type==1 ? QSize(17,11) : type==4 ? QSize(8,10) : QSize(36,24);
             auto *target=new CityLayoutElement("Target",QPixmap(targets[type]),size,LegoGrid::pixelsPerStud,zoom,&view,targets[type]);
             if (target->isFlexTrack()) target->setFlexBendDegrees(-5.625);
             target->rotateByDegrees(22.5);
@@ -34,9 +34,9 @@ static int checkFlexTrack(CityLayoutView &view, LoadedProjects &projects)
                     const qreal turn=qRound((angle+180-(end==0 ? 180 : bend))/5.625)*5.625;
                     flex->rotateByDegrees(turn-flex->rotationDegrees());
                     const QLineF moving=flex->trackConnections().at(end);
-                    const QPointF ideal=QPointF(target->pos())+port.p1()-moving.p1();
-                    const QPoint snapped=view.snappedPosition(ideal.toPoint()+QPoint(3,-2),flex);
-                    if (QLineF(QPointF(snapped)+moving.p1(),QPointF(target->pos())+port.p1()).length()>0.75) return 34;
+                    const QPointF ideal=target->layoutPosition()+port.p1()-moving.p1();
+                    const QPointF snapped=view.snappedPosition(ideal.toPoint()+QPoint(3,-2),flex);
+                    if (QLineF(QPointF(snapped)+moving.p1(),target->layoutPosition()+port.p1()).length()>0.75) return 34;
                     ++connections;
                 }
             }

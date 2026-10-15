@@ -38,10 +38,11 @@ inline constexpr qreal curveSweepDegrees = 22.5;
 // 16-stud length is not the exact arc length (40 * pi / 8).
 inline constexpr qreal curveRadiusStuds = 40.0;
 
-// Switch end-sleeper origins measured from LDraw 53404/53407 (20 LDU per stud).
-inline constexpr qreal switchCanvasWidthStuds = 24.0;
-inline constexpr qreal switchCanvasHeightStuds = 36.0;
-inline constexpr qreal switchEntranceYStuds = 1.0;
+// Horizontal switch canvases. Connector dimensions measured from LDraw
+// 53404/53407 (20 LDU per stud); the entrance is inset from either side.
+inline constexpr qreal switchCanvasWidthStuds = 36.0;
+inline constexpr qreal switchCanvasHeightStuds = 24.0;
+inline constexpr qreal switchEntranceInsetStuds = 1.0;
 inline constexpr qreal switchStraightLengthStuds = 32.0;
 inline constexpr qreal switchBranchOffsetStuds = 259.103 / 20.0;
 inline constexpr qreal switchBranchLengthStuds = (333.852 + 320.0) / 20.0;

@@ -26,5 +26,5 @@ public:
     explicit CurvedTrack(QWidget *parent = nullptr);
 
 protected:
-    QPixmap loadElementImage( const QString& resourcePath ) override;
+    QPixmap loadElementImage( const QString& resourcePath, qreal previewScale ) override;
 };

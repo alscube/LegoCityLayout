@@ -20,10 +20,7 @@
 
 #include "LayoutElement.h"
 
-#include "BasePlate16x32Green.h"
-#include "BasePlate32x32Green.h"
-#include "BasePlate48x48Gray.h"
-#include "TestPlate.h"
+#include "ElementCatalog.h"
 
 #include "StraightTrack.h"
 #include "CurvedTrack.h"
@@ -34,6 +31,30 @@
 #include <QTabWidget>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <QMap>
+
+
+namespace {
+class PlateElement final : public LayoutElement
+{
+public:
+    PlateElement(const ElementDefinition &definition, QWidget *parent)
+        : LayoutElement(definition.displayName, definition.resourcePath, definition.size, parent)
+        , m_previewScale(definition.previewScale)
+    {
+        initElementImage();
+    }
+
+protected:
+    QPixmap loadElementImage(const QString &path, qreal = 0.0) override
+    {
+        return LayoutElement::loadElementImage(path, m_previewScale);
+    }
+
+private:
+    qreal m_previewScale;
+};
+}
 
 
 LayoutElementsView::LayoutElementsView(QWidget *parent)
@@ -42,6 +63,26 @@ LayoutElementsView::LayoutElementsView(QWidget *parent)
 }
 
 
+struct NewTab LayoutElementsView::FindOrCreateTab( const QString& name )
+{
+    if (_knownElementTabs.contains(name))
+        return _knownElementTabs.value(name);
+
+    auto *page = new QWidget( _elementTab );
+    auto *pageLayout = new QVBoxLayout(page);
+
+    auto *scroll = new QScrollArea(_elementTab);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(page);
+
+    _elementTab->addTab(scroll, name);
+    const NewTab result{page, pageLayout};
+    _knownElementTabs.insert(name, result);
+
+    return result;
+}
+
 void LayoutElementsView::addLayoutElements()
 {
     if (layout()) return;
@@ -49,38 +90,32 @@ void LayoutElementsView::addLayoutElements()
     setMinimumWidth(170);
 
     auto *layout = new QVBoxLayout(this);
-    auto *tabs = new QTabWidget(this);
-    tabs->setObjectName(QStringLiteral("layoutElementsTabs"));
-    layout->addWidget(tabs);
+    _elementTab = new QTabWidget(this);
+     _elementTab->setObjectName(QStringLiteral("layoutElementsTabs"));
+    layout->addWidget( _elementTab);
 
-    auto *platesPage = new QWidget(tabs);
-    auto *platesLayout = new QVBoxLayout(platesPage);
-    tabs->addTab(platesPage, tr("Plates"));
-    platesLayout->addWidget(new BasePlate16x32Green(platesPage),0, Qt::AlignHCenter);
-    platesLayout->addWidget(new BasePlate32x32Green(platesPage),0, Qt::AlignHCenter);
-    platesLayout->addWidget(new BasePlate48x48Gray(platesPage),0, Qt::AlignHCenter);
-    platesLayout->addWidget(new TestPlate(platesPage),0, Qt::AlignHCenter);
-    platesLayout->addStretch();
+    // Generic way of loading Elements from a directory
+    QList<ElementDefinition> elements = ElementCatalog::instance().loadAllElements();
+    for (const auto& element : elements)
+    {
+        if (element.tabName.isEmpty())
+            continue;
 
-    auto *buildingsPage = new QWidget(tabs);
-    auto *buildingsLayout = new QVBoxLayout(buildingsPage);
-    buildingsLayout->addWidget(new LayoutElement(
-        tr("Town Hall"), QStringLiteral(":/images/TownHall.png"),
-        QSize(32, 32), buildingsPage), 0, Qt::AlignHCenter);
-    buildingsLayout->addStretch();
-    tabs->addTab(buildingsPage, tr("Buildings"));
+        const auto tab = FindOrCreateTab(element.tabName);
+        tab.layout->addWidget(new PlateElement(element, tab.widget), 0, Qt::AlignHCenter);
+    }
 
-    auto *tracksPage = new QWidget(tabs);
-    auto *tracksLayout = new QVBoxLayout(tracksPage);
-    tracksLayout->addWidget(new StraightTrack(tracksPage), 0, Qt::AlignHCenter);
-    tracksLayout->addWidget(new CurvedTrack(tracksPage), 0, Qt::AlignHCenter);
-    tracksLayout->addWidget(new LeftSwitchTrack(tracksPage), 0, Qt::AlignHCenter);
-    tracksLayout->addWidget(new RightSwitchTrack(tracksPage), 0, Qt::AlignHCenter);
-    tracksLayout->addWidget(new FlexTrack(tracksPage), 0, Qt::AlignHCenter);
-    tracksLayout->addStretch();
-    auto *tracksScroll = new QScrollArea(tabs);
-    tracksScroll->setWidgetResizable(true);
-    tracksScroll->setFrameShape(QFrame::NoFrame);
-    tracksScroll->setWidget(tracksPage);
-    tabs->addTab(tracksScroll, tr("Tracks"));
+    // const auto buildingTab = FindOrCreateTab(tr("Buildings"));
+    // auto *townHall = new LayoutElement(tr("Town Hall"), QStringLiteral(":/images/TownHall.png"), QSize(32, 32), buildingTab.widget);
+    // buildingTab.layout->addWidget(townHall, 0, Qt::AlignHCenter);
+
+    const auto trackTab = FindOrCreateTab(tr("Tracks"));
+    trackTab.layout->addWidget(new StraightTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    trackTab.layout->addWidget(new CurvedTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    trackTab.layout->addWidget(new LeftSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    trackTab.layout->addWidget(new RightSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    trackTab.layout->addWidget(new FlexTrack(trackTab.widget), 0, Qt::AlignHCenter);
+
+    for (const auto& tab : _knownElementTabs)
+        tab.layout->addStretch();
 }

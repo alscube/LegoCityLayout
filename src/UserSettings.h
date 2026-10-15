@@ -37,6 +37,9 @@ public:
     UserSettings(UserSettings &&) = delete;
     UserSettings &operator=(UserSettings &&) = delete;
 
+    QString layoutSaveDirectory() const;
+    void setLayoutSaveDirectory(const QString &directory);
+
     QByteArray splitterState() const;
     void setSplitterState(const QByteArray &state);
 

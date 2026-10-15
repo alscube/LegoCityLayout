@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#include <QBuffer>
 #include <QJsonArray>
 #include <QJsonDocument>
 
 #include "CityLayoutView.h"
 #include "LegoGrid.h"
 #include "elements/CityLayoutElement.h"
+#include "elements/ElementCatalog.h"
 #include "LoadedProjects.h"
 
 #include <QApplication>
@@ -63,6 +63,21 @@ CityLayoutView::CityLayoutView(QWidget *parent)
     setAcceptDrops(true);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
+    m_zoomTimer.setSingleShot(false);
+    m_zoomTimer.setTimerType(Qt::PreciseTimer);
+    connect(&m_zoomTimer, &QTimer::timeout, this, [this] {
+        if (_Projects.currentProject() != m_zoomProject) {
+            m_zoomTimer.stop();
+            return;
+        }
+        const qreal zoom = m_zoomProject->zoomFactor;
+        const qreal distance = std::log(m_requestedZoom / zoom);
+        const bool finished = qAbs(distance) < 0.001;
+        const qreal nextZoom = finished ? m_requestedZoom : zoom * std::exp(distance * 0.6);
+        _Projects.setViewZoom(m_zoomAnchor, nextZoom);
+        if (finished) m_zoomTimer.stop();
+        update();
+    });
 
 
 }
@@ -70,6 +85,10 @@ CityLayoutView::CityLayoutView(QWidget *parent)
 
 void CityLayoutView::activateProject()
 {
+    m_zoomTimer.stop();
+    m_zoomProject = nullptr;
+    m_studLayer = QPixmap();
+    m_studProject = nullptr;
     m_mouseDragged = false;
     m_isPanning = false;
     unsetCursor();
@@ -108,14 +127,16 @@ void CityLayoutView::dropEvent(QDropEvent *event)
         name, pixmap, plateSize, pixelsPerStud,
         _Projects.currentProject()->zoomFactor, this, resourcePath);
 
-    if (layoutElement->isStraightTrack()) layoutElement->rotateByDegrees(90.0);
-
     const QPoint requestedPosition = event->position().toPoint()
                                      - QPoint(layoutElement->width() / 2,
                                               layoutElement->height() / 2);
-    layoutElement->move(snappedPosition(requestedPosition, layoutElement));
+    layoutElement->setLayoutPosition(snappedPosition(requestedPosition, layoutElement));
     layoutElement->show();
     _Projects.cityLayouts().append(layoutElement);
+    if (_Projects.currentProject()->trackRun.recordAdded(layoutElement, _Projects.cityLayouts())) {
+        _Projects.cityLayouts().setSelectedElement(layoutElement);
+        setFocus(Qt::OtherFocusReason);
+    }
     ++_Projects.currentProject()->changeRevision;
 
     event->acceptProposedAction();
@@ -247,21 +268,20 @@ void CityLayoutView::mouseReleaseEvent(QMouseEvent *event)
 void CityLayoutView::wheelEvent(QWheelEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
-    const int wheelDelta = event->angleDelta().y();
+    const int wheelDelta = event->angleDelta().y() != 0
+        ? event->angleDelta().y() : event->pixelDelta().y() * 2;
     if (wheelDelta == 0) {
         QWidget::wheelEvent(event);
         return;
     }
-
-    const qreal requestedZoom = _Projects.currentProject()->zoomFactor * std::pow(1.0015, wheelDelta);
-    const qreal newZoom = qBound(minimumZoom, requestedZoom, maximumZoom);
-    if (qFuzzyCompare(newZoom, _Projects.currentProject()->zoomFactor)) {
-        event->accept();
-        return;
-    }
-
-    _Projects.setViewZoom(event->position(), newZoom);
-    update();
+    auto *project = _Projects.currentProject();
+    const qreal startingZoom = m_zoomTimer.isActive() && m_zoomProject == project
+        ? m_requestedZoom : project->zoomFactor;
+    m_requestedZoom = qBound(minimumZoom, startingZoom * std::pow(1.0015, wheelDelta), maximumZoom);
+    m_zoomAnchor = event->position();
+    m_zoomProject = project;
+    // Accumulate wheel input and ease toward its target once per frame.
+    if (!m_zoomTimer.isActive()) m_zoomTimer.start(16);
     event->accept();
 }
 
@@ -269,7 +289,7 @@ void CityLayoutView::wheelEvent(QWheelEvent *event)
 void CityLayoutView::panBy(const QPoint &offset)
 {
     for (CityLayoutElement *image : _Projects.cityLayouts()) {
-        image->move(image->pos() + offset);
+        image->setLayoutPosition(image->layoutPosition() + offset);
     }
     _Projects.tableDefinition().translate(offset);
     _Projects.currentProject()->gridOrigin += offset;
@@ -280,6 +300,20 @@ void CityLayoutView::panBy(const QPoint &offset)
 void CityLayoutView::keyPressEvent(QKeyEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (!(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
+        const bool add = event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal;
+        const bool remove = event->key() == Qt::Key_Minus;
+        auto *project = _Projects.currentProject();
+        const bool changed = add
+            ? project->trackRun.extend(_Projects.cityLayouts(), project->zoomFactor, this) != nullptr
+            : remove && project->trackRun.trim(_Projects.cityLayouts());
+        if (changed) {
+            ++project->changeRevision;
+            update();
+            event->accept();
+            return;
+        }
+    }
     if (event->key() == Qt::Key_R
         && !(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))
         && _Projects.cityLayouts().selectedElement()) {
@@ -312,7 +346,7 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
     if (!_Projects.currentProject()) return;
     if (_Projects.tableEditor().gridVisible && !LoadedProjects::instance().title().isEmpty()) {
         painter.setRenderHint(QPainter::Antialiasing, false);
-        painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
+        painter.setPen(QPen(QColor(110, 110, 110, 210), 1));
         const qreal scaledGridSpacing = gridSpacing * _Projects.currentProject()->zoomFactor;
         qreal firstX = std::fmod(_Projects.currentProject()->gridOrigin.x(), scaledGridSpacing);
         qreal firstY = std::fmod(_Projects.currentProject()->gridOrigin.y(), scaledGridSpacing);
@@ -333,9 +367,44 @@ void CityLayoutView::paintEvent(QPaintEvent *event)
         const QPainterPath surface = _Projects.tableDefinition().usableArea();
         painter.drawPath(surface);
         if (_Projects.tableEditor().gridVisible) {
-            LegoGrid::paintStuds(painter, surface, rect(),
-                                 _Projects.currentProject()->gridOrigin,
-                                 _Projects.currentProject()->zoomFactor);
+            const auto *project = _Projects.currentProject();
+            const qreal zoom = project->zoomFactor;
+            const QPointF origin = project->gridOrigin;
+            const qreal dpr = devicePixelRatioF();
+            const bool preview = m_zoomTimer.isActive() && !m_studLayer.isNull()
+                && m_studProject == project && m_studZoom > 0.0;
+            if (!preview) {
+                // Include a margin so a typical zoom-out can reveal cached studs.
+                const int margin = qMin(256, qMax(width(), height()) / 4);
+                const QRect bounds = rect().adjusted(-margin, -margin, margin, margin);
+                if (m_studLayer.isNull() || m_studLayerRect != bounds || m_studSurface != surface
+                    || m_studOrigin != origin || !qFuzzyCompare(m_studZoom, zoom)
+                    || m_studLayer.devicePixelRatioF() != dpr || m_studProject != project) {
+                    m_studLayer = QPixmap(qRound(bounds.width() * dpr), qRound(bounds.height() * dpr));
+                    m_studLayer.setDevicePixelRatio(dpr);
+                    m_studLayer.fill(Qt::transparent);
+                    QPainter studs(&m_studLayer);
+                    studs.setRenderHint(QPainter::Antialiasing);
+                    studs.translate(-bounds.topLeft());
+                    LegoGrid::paintStuds(studs, surface, bounds, origin, zoom);
+                    m_studLayerRect = bounds;
+                    m_studSurface = surface;
+                    m_studOrigin = origin;
+                    m_studZoom = zoom;
+                    m_studProject = _Projects.currentProject();
+                }
+            }
+            if (LegoGrid::pixelsPerStud * zoom >= 4.0) {
+                // Scale the existing layer for interactive frames; redraw precisely on settling.
+                const qreal scale = zoom / m_studZoom;
+                painter.save();
+                painter.setClipPath(surface, Qt::IntersectClip);
+                painter.setRenderHint(QPainter::SmoothPixmapTransform);
+                painter.translate(origin - m_studOrigin * scale);
+                painter.scale(scale, scale);
+                painter.drawPixmap(m_studLayerRect.topLeft(), m_studLayer);
+                painter.restore();
+            }
         }
     }
     if (!_Projects.tableDefinition().openSides().isEmpty()) {
@@ -459,22 +528,14 @@ QJsonObject CityLayoutView::savedLayout() const
 {
     QJsonArray elements;
     for (const CityLayoutElement *element : _Projects.cityLayouts()) {
-        QByteArray image;
-        QBuffer buffer(&image);
-        buffer.open(QIODevice::WriteOnly);
-        element->sourcePixmap().save(&buffer, "PNG");
-        elements.append(QJsonObject{
+//        const auto *definition = ElementCatalog::instance().byResource(element->resourcePath());
+        QJsonObject placement{
             {QStringLiteral("name"), element->name()},
-            {QStringLiteral("resourcePath"), element->resourcePath()},
-            {QStringLiteral("widthStuds"), element->plateSize().width()},
-            {QStringLiteral("heightStuds"), element->plateSize().height()},
-            {QStringLiteral("rotationDegrees"), element->rotationDegrees()},
-            {QStringLiteral("flexBendDegrees"), element->flexBendDegrees()},
-            {QStringLiteral("imageGeometryVersion"), 2},
-            {QStringLiteral("imageIsUnrotated"), true},
-            {QStringLiteral("x"), element->x()},
-            {QStringLiteral("y"), element->y()},
-            {QStringLiteral("imagePngBase64"), QString::fromLatin1(image.toBase64())}});
+            {QStringLiteral("x"), element->layoutPosition().x()},
+            {QStringLiteral("y"), element->layoutPosition().y()},
+            {QStringLiteral("rotationDegrees"), element->rotationDegrees()}};
+        if (element->isFlexTrack()) placement.insert(QStringLiteral("flexBendDegrees"), element->flexBendDegrees());
+        elements.append(placement);
     }
     return QJsonObject{{QStringLiteral("elements"), elements},
                        {QStringLiteral("zoomFactor"), _Projects.currentProject()->zoomFactor},
@@ -489,12 +550,12 @@ quint64 CityLayoutView::changeRevision() const
 }
 
 
-QPoint CityLayoutView::snappedPosition(const QPoint &position,
+QPointF CityLayoutView::snappedPosition(const QPointF &position,
                                      const CityLayoutElement *movingElement) const
 {
     if (!_Projects.currentProject()) return position;
     const auto *project = _Projects.currentProject();
-    QPoint result = position;
+    QPointF result = position;
     // Compatible rail ends take precedence over the underlying stud lattice.
     if (movingElement) {
         qreal nearest = snapDistance + 0.01;
@@ -510,7 +571,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
                     const QPointF targetDirection = (target.p2() - target.p1()) / target.length();
                     const qreal dot = QPointF::dotProduct(movingDirection, targetDirection);
                     if (dot > -0.996) continue;
-                    const QPointF offset = QPointF(other->pos()) + target.p1()
+                    const QPointF offset = other->layoutPosition() + target.p1()
                         - (QPointF(position) + moving.p1());
                     const qreal distance = QLineF(QPointF(), offset).length();
                     if (distance < nearest) {
@@ -521,7 +582,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
                 }
             }
         }
-        if (foundConnection) return (QPointF(position) + connectionOffset).toPoint();
+        if (foundConnection) return position + connectionOffset;
     }
     // A diagonal straight track or switch cannot align its body to the stud lattice.
     // Keep rail-end snapping above, then let unmatched diagonal tracks float.
@@ -533,7 +594,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
         // Align the sleeper/plate body, excluding image padding and connectors.
         const QPointF offset = movingElement ? movingElement->footprintRect().topLeft() : QPointF();
         return (LegoGrid::snappedPoint(QPointF(position) + offset,
-                                      project->gridOrigin, project->zoomFactor) - offset).toPoint();
+                                      project->gridOrigin, project->zoomFactor) - offset);
     }
     if (!movingElement) return result;
 
@@ -546,7 +607,7 @@ QPoint CityLayoutView::snappedPosition(const QPoint &position,
     const int bottom = qRound(movingBounds.bottom());
     for (const CityLayoutElement *other : _Projects.cityLayouts()) {
         if (other == movingElement) continue;
-        const QRectF otherBounds = other->footprintRect().translated(other->pos());
+        const QRectF otherBounds = other->footprintRect().translated(other->layoutPosition());
         const int otherLeft = qRound(otherBounds.left());
         const int otherTop = qRound(otherBounds.top());
         const int otherRight = qRound(otherBounds.right());
@@ -594,7 +655,7 @@ void CityLayoutView::rotateSelectedPlateByDegrees(qreal degrees)
     if (!plate) return;
     plate->rotateByDegrees(degrees);
     if (_Projects.tableEditor().snapToGrid || !plate->trackConnections().isEmpty()) {
-        plate->move(snappedPosition(plate->pos(), plate));
+        plate->setLayoutPosition(snappedPosition(plate->layoutPosition(), plate));
     }
     ++_Projects.currentProject()->changeRevision;
     update();

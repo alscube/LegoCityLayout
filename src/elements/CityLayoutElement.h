@@ -21,9 +21,11 @@
 #include <QLineF>
 #include <QList>
 #include <QPixmap>
-#include <QTransform>
 #include <QString>
 #include <QSizeF>
+#include <memory>
+
+class CityLayoutTrack;
 
 class CityLayoutElement final : public QLabel
 {
@@ -36,23 +38,30 @@ public:
                                QWidget *parent = nullptr,
                                const QString &resourcePath = QString());
 
+    ~CityLayoutElement() override;
+
     QString name() const;
     QString resourcePath() const { return m_resourcePath; }
-    bool isStraightTrack() const { return m_isStraightTrack; }
-    bool isSwitchTrack() const { return m_switchHandedness != 0; }
-    bool isFlexTrack() const { return m_isFlexTrack; }
-    bool isTrack() const { return m_isStraightTrack || m_isCurvedTrack || isSwitchTrack() || isFlexTrack(); }
-    qreal flexBendDegrees() const { return m_flexBendDegrees; }
+    // Compatibility accessors delegate all track behavior to CityLayoutTrack.
+    bool isStraightTrack() const;
+    bool isSwitchTrack() const;
+    bool isFlexTrack() const;
+    bool isTrack() const { return bool(m_track); }
+    qreal flexBendDegrees() const;
     bool setFlexBendDegrees(qreal degrees);
     bool containsPoint(const QPoint &localPoint) const;
     void setSelectionHighlighted(bool highlighted);
     QSize plateSize() const { return m_plateSize; }
     void setZoomFactor(qreal zoomFactor);
+    void zoomFromAnchor(const QPointF &anchor, qreal relativeScale, qreal zoomFactor);
+    // Logical canvas coordinates retain fractions between rounded QWidget moves.
+    QPointF layoutPosition() const;
+    void setLayoutPosition(const QPointF &position);
     QPixmap savedPixmap() const;
     // Stud-aligned body bounds, excluding artwork margins and connector overhangs.
     QRectF footprintRect() const;
     void rotateQuarterTurns(int turns);
-    // Tracks turn in 22.5-degree steps; other elements use quarter turns.
+    // Track-specific step sizes come from the optional helper; plates use quarter turns.
     qreal rotationStepDegrees() const;
     void rotateSteps(int steps);
     void rotateByDegrees(qreal degrees);
@@ -64,7 +73,8 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    QRect m_selectionBounds;
+    friend class CityLayoutTrack;
+    std::unique_ptr<CityLayoutTrack> m_track;
     bool m_selectionHighlighted = false;
     QString m_name;
     QString m_resourcePath;
@@ -75,11 +85,7 @@ private:
     QRectF m_unscaledFootprint;
     qreal m_zoomFactor = 1.0;
     qreal m_rotationDegrees = 0.0;
-    int m_switchHandedness = 0; // -1 left, +1 right.
-    bool m_isFlexTrack = false;
-    qreal m_flexBendDegrees = 0.0;
-    bool m_isCurvedTrack = false;
-    bool m_isStraightTrack = false;
-    QTransform m_curveArtworkTransform;
-    QPointF displayedPoint(const QPointF &point) const;
+    QPointF m_precisePosition;
+    QPoint m_lastZoomPosition;
+    bool m_hasPrecisePosition = false;
 };

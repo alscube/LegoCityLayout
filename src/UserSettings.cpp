@@ -19,8 +19,10 @@
 #include "LegoGrid.h"
 
 #include <QCoreApplication>
+#include <QDir>
 
 namespace {
+constexpr auto layoutSaveDirectoryKey = "tableDefinition/saveDirectory";
 constexpr auto splitterStateKey = "mainWindow/splitterState";
 constexpr auto mainWindowGeometryKey = "mainWindow/geometry";
 constexpr auto measurementSystemKey = "measurementSystem";
@@ -37,6 +39,22 @@ UserSettings::UserSettings()
     : m_settings(QStringLiteral("LegoCityLayout"),
                  QStringLiteral("LegoCityLayout"))
 {
+    // Preserve a directory previously saved through the default QSettings object.
+    const auto previous = QSettings().value(layoutSaveDirectoryKey);
+    if (!m_settings.contains(layoutSaveDirectoryKey) && previous.isValid())
+        m_settings.setValue(layoutSaveDirectoryKey, previous);
+}
+
+QString UserSettings::layoutSaveDirectory() const
+{
+    return m_settings.value(layoutSaveDirectoryKey).toString();
+}
+
+void UserSettings::setLayoutSaveDirectory(const QString &directory)
+{
+    if (directory.isEmpty()) m_settings.setValue(layoutSaveDirectoryKey, QString());
+    else m_settings.setValue(layoutSaveDirectoryKey, QDir(directory).absolutePath());
+    m_settings.sync();
 }
 
 QByteArray UserSettings::splitterState() const

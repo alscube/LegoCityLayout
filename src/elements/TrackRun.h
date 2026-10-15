@@ -18,10 +18,27 @@
 
 #pragma once
 
-#include "LayoutElement.h"
+#include <QList>
+#include <QPointer>
 
-class BasePlate48x48Gray final : public LayoutElement
+class CityLayoutElement;
+class CityLayoutElements;
+class QWidget;
+
+// Addition order for the active run, independent of the layout's drawing order.
+class TrackRun final
 {
 public:
-    explicit BasePlate48x48Gray(QWidget *parent = nullptr);
+    bool recordAdded(CityLayoutElement *element, const CityLayoutElements &layout);
+    CityLayoutElement *extend(CityLayoutElements &layout, qreal zoom, QWidget *parent);
+    bool trim(CityLayoutElements &layout);
+
+private:
+    struct Entry {
+        QPointer<CityLayoutElement> element;
+        int entrance = 0;
+        int exit = 1;
+    };
+    void prune(const CityLayoutElements &layout);
+    QList<Entry> m_entries;
 };

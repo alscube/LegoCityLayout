@@ -859,7 +859,7 @@ void TableDefinitionEditorView::paintEvent(QPaintEvent *event)
 
     if (_Projects.tableEditor().gridVisible) {
         painter.setRenderHint(QPainter::Antialiasing, false);
-        painter.setPen(QPen(QColor(205, 205, 205, 150), 1));
+        painter.setPen(QPen(QColor(110, 110, 110, 210), 1));
         const qreal scaledGridSpacing = gridSpacing * _Projects.tableEditor().viewScale;
         const QPointF origin = _Projects.currentProject()->gridOrigin;
         qreal firstX = std::fmod(origin.x(), scaledGridSpacing);
@@ -940,7 +940,7 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
                     side.length() / (pixelsPerInch * _Projects.tableEditor().viewScale)));
         }
         if (_Projects.tableEditor().drawingSide) {
-            painter.setPen(QPen(editingPreviewColor, 1, Qt::DashLine));
+            painter.setPen(QPen(editingPreviewColor, 3, Qt::DashLine));
             painter.drawLine(_Projects.tableEditor().sideStart, _Projects.tableEditor().cursor);
             paintLiveMeasurement(painter, QLineF(_Projects.tableEditor().sideStart,
                                                   _Projects.tableEditor().cursor));
@@ -966,7 +966,7 @@ void TableDefinitionEditorView::paintDefinition(QPainter &painter) const
         painter.drawEllipse(point, 5, 5);
     }
     if (!_Projects.tableEditor().draft.isEmpty()) {
-        painter.setPen(QPen(editingPreviewColor, 1, Qt::DashLine));
+        painter.setPen(QPen(editingPreviewColor, 3, Qt::DashLine));
         painter.drawLine(_Projects.tableEditor().draft.last(), _Projects.tableEditor().cursor);
         if (_Projects.tableEditor().draft.size() >= 3) {
             painter.drawEllipse(_Projects.tableEditor().draft.first(), closePointDistance,

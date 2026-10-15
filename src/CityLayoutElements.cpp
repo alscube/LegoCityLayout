@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+
 #include "CityLayoutElements.h"
 
 #include "CityLayoutElement.h"
@@ -23,7 +24,6 @@
 
 #include "QApplication"
 #include "QMouseEvent"
-
 
 
 
@@ -173,7 +173,7 @@ bool CityLayoutElements::dragElementOnMouseMove( CityLayoutView* view, QMouseEve
     }
 
     const QPoint requestedPosition = position - view->dragOffset();
-    draggedElement->move(view->snappedPosition(requestedPosition, draggedElement));
+    draggedElement->setLayoutPosition(view->snappedPosition(requestedPosition, draggedElement));
 
     event->accept();
     return true;
@@ -199,12 +199,8 @@ bool CityLayoutElements::elementDragged( QWidget *view, bool mouseDragged )
 
 void CityLayoutElements::zoomAllElements( const QPointF anchor, const qreal relativeScale, qreal newZoom )
 {
-    for (CityLayoutElement *image : *this ) {//_LayoutElements) {
-        const QPointF position = anchor
-                                 + (QPointF(image->pos()) - anchor) * relativeScale;
-        image->setZoomFactor(newZoom);
-        image->move(qRound(position.x()), qRound(position.y()));
-    }
+    for (CityLayoutElement *image : *this)
+        image->zoomFromAnchor(anchor, relativeScale, newZoom);
 }
 
 

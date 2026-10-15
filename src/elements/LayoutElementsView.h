@@ -15,9 +15,17 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <QWidget>
+
+class QVBoxLayout;
+class QTabWidget;
+
+
+struct NewTab { QWidget *widget; QVBoxLayout* layout; };
+
 
 class LayoutElementsView final : public QWidget
 {
@@ -27,4 +35,10 @@ public:
     explicit LayoutElementsView(QWidget *parent = nullptr);
 
     void addLayoutElements();
+
+private:
+    struct NewTab FindOrCreateTab( const QString& name );
+
+    QTabWidget* _elementTab = nullptr;
+    QMap<QString, NewTab> _knownElementTabs;
 };

@@ -27,18 +27,15 @@
 
 StraightTrack::StraightTrack(QWidget *parent)
     : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Straight Track"),
-                    QStringLiteral(":/images/StrightTrack.png"), QSize(8, 16), parent)
+                    QStringLiteral(":/images/StrightTrack.png"), QSize(16, 8), parent)
 {
     initElementImage();
 }
 
 
-QPixmap StraightTrack::loadElementImage( const QString& resourcePath )
+QPixmap StraightTrack::loadElementImage( const QString& resourcePath, qreal previewScale )
 {
-    QPixmap elementImage = LayoutElement::loadElementImage(resourcePath);
-
-    elementImage = elementImage.scaled(elementImage.size() * PREVIEW_SCALE,
-            Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPixmap elementImage = LayoutElement::loadElementImage( resourcePath, PREVIEW_SCALE );
 
     return elementImage;
 }

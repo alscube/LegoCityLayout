@@ -85,13 +85,18 @@ void LayoutElement::initElementImage( )
 }
 
 
-QPixmap LayoutElement::loadElementImage( const QString& resourcePath )
+QPixmap LayoutElement::loadElementImage( const QString& resourcePath, qreal previewScale )
 {
     QPixmap elementImage(resourcePath);
 
-    // Keep large source assets from expanding the palette beyond the window.
+    // Keep large source assets from expanding beyond the window.
     if (elementImage.width() > MAX_WIDTH || elementImage.height() > MAX_HEIGHT) {
         elementImage = elementImage.scaled(QSize(MAX_WIDTH, MAX_HEIGHT), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
+    if ( previewScale > 0.0 )
+    {
+        elementImage = elementImage.scaled(elementImage.size() * previewScale, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
     return elementImage;

@@ -17,7 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
-#include "elements/CityLayoutElements.h"
+#include "CityLayoutElements.h"
+#include "elements/TrackRun.h"
 #include "TableDefinition.h"
 #include <QByteArray>
 
@@ -54,11 +55,13 @@ public:
 
     TableDefinition tableDefinition;
     CityLayoutElements cityLayouts;
+    TrackRun trackRun;
     TableEditorState tableEditor;
     bool editingTable = false;
     QPointF gridOrigin;
     qreal zoomFactor = 1.875;
     quint64 changeRevision = 0;
+    QString filePath;
     QByteArray savedTableState;
     quint64 savedLayoutRevision = 0;
 

@@ -33,12 +33,9 @@ CurvedTrack::CurvedTrack(QWidget *parent)
 }
 
 
-QPixmap CurvedTrack::loadElementImage( const QString& resourcePath )
+QPixmap CurvedTrack::loadElementImage( const QString& resourcePath, qreal previewScale )
 {
-    QPixmap elementImage = LayoutElement::loadElementImage(resourcePath);
-
-    elementImage = elementImage.scaled(elementImage.size() * PREVIEW_SCALE,
-                                       Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPixmap elementImage = LayoutElement::loadElementImage(resourcePath, PREVIEW_SCALE);
 
     return elementImage;
 }
