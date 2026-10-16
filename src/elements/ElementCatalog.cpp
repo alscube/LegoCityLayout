@@ -42,13 +42,17 @@ ElementCatalog::ElementCatalog()
     // Track info is added here becuase it is not loaded from external files
 
     _allLoadedElements.append({
-        {QStringLiteral("Straight Track"), QStringLiteral(":/images/StrightTrack.png"), QSize(16,8)},
-        {QStringLiteral("Curved Track (22.5°)"), QStringLiteral(":/images/CurvedTrack.png"), QSize(17,11)},
-        {QStringLiteral("Left Switch"), QStringLiteral(":/images/LeftSwitchTrack.png"),
+        {QStringLiteral("Straight Track 53401"), QStringLiteral(":/images/StrightTrack.png"), QSize(16,8)},
+        {QStringLiteral("Curved Track 53400 (22.5°)"), QStringLiteral(":/images/CurvedTrack.png"), QSize(17,11)},
+        {QStringLiteral("Left Switch 53407"), QStringLiteral(":/images/LeftSwitchTrack.png"),
             QSize(qRound(LegoGrid::switchCanvasWidthStuds),qRound(LegoGrid::switchCanvasHeightStuds))},
-        {QStringLiteral("Right Switch"), QStringLiteral(":/images/RightSwitchTrack.png"),
+        {QStringLiteral("Right Switch 53404"), QStringLiteral(":/images/RightSwitchTrack.png"),
             QSize(qRound(LegoGrid::switchCanvasWidthStuds),qRound(LegoGrid::switchCanvasHeightStuds))},
-        {QStringLiteral("Flex Track"), QStringLiteral(":/images/FlexTrack.png"), QSize(8,10)}
+        {QStringLiteral("Flex Track 64022"), QStringLiteral(":/images/FlexTrack.png"), QSize(8,10)},
+        {QStringLiteral("Straight Road 60304"), QStringLiteral(":/images/RoadPlate16x16.png"), QSize(16,16)},
+        {QStringLiteral("Road Turn 60304"), QStringLiteral(":/images/RoadTurnPlate16x16.png"), QSize(16,16)},
+        {QStringLiteral("Road Intersection 60304"), QStringLiteral(":/images/RoadIntersectionPlate16x16.png"), QSize(16,16)},
+        {QStringLiteral("Crosswalk 60304"), QStringLiteral(":/images/CrosswalkPlate8x16.png"), QSize(16,8)}
     });
 }
 
@@ -201,7 +205,7 @@ const QList<ElementDefinition> &ElementCatalog::allLoadedElements() const
 
 const ElementDefinition *ElementCatalog::byName(const QString &name) const
 {
-    for (const auto &element : _allLoadedElements)
+     for (const auto &element : _allLoadedElements)
         if (element.name == name) return &element;
     // Palette labels originate in .info files and may be saved by the current UI.
     for (const auto &element : _allLoadedElements)

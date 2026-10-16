@@ -25,7 +25,7 @@
 
 
 FlexTrack::FlexTrack(QWidget *parent)
-    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Flex Track"),
+    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Flex Track 64022"),
                     QStringLiteral(":/images/FlexTrack.png"),
                     QSize(8, 10), parent)
 {

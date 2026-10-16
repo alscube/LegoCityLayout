@@ -1,12 +1,16 @@
 <RCC>
     <qresource prefix="/images">
+        <file alias="CrosswalkPlate8x16.png">resources/CrosswalkPlate8x16.png</file>
+        <file alias="RoadIntersectionPlate16x16.png">resources/RoadIntersectionPlate16x16.png</file>
+        <file alias="RoadTurnPlate16x16.png">resources/RoadTurnPlate16x16.png</file>
+        <file alias="RoadPlate16x16.png">resources/RoadPlate16x16.png</file>
         <file alias="StrightTrack.png">resources/StrightTrack.png</file>
         <file alias="CurvedTrack.png">resources/CurvedTrack.png</file>
-        <file alias="LeftSwitchTrack.png">resources/LeftSwitchTrack.png</file>
-        <file alias="RightSwitchTrack.png">resources/RightSwitchTrack.png</file>
         <file alias="FlexTrack.png">resources/FlexTrack.png</file>
         <file alias="FlexTrackFemale.png">resources/FlexTrackFemale.png</file>
         <file alias="FlexTrackMale.png">resources/FlexTrackMale.png</file>
+        <file alias="LeftSwitchTrack.png">resources/LeftSwitchTrack.png</file>
+        <file alias="RightSwitchTrack.png">resources/RightSwitchTrack.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="units-IN.svg">resources/icons/units-IN.svg</file>

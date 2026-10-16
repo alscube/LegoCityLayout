@@ -28,6 +28,11 @@
 #include "RightSwitchTrack.h"
 #include "FlexTrack.h"
 
+#include "StraightRoadPlate.h"
+#include "RoadTurnPlate.h"
+#include "RoadIntersectionPlate.h"
+#include "CrosswalkPlate.h"
+
 #include <QTabWidget>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -105,16 +110,18 @@ void LayoutElementsView::addLayoutElements()
         tab.layout->addWidget(new PlateElement(element, tab.widget), 0, Qt::AlignHCenter);
     }
 
-    // const auto buildingTab = FindOrCreateTab(tr("Buildings"));
-    // auto *townHall = new LayoutElement(tr("Town Hall"), QStringLiteral(":/images/TownHall.png"), QSize(32, 32), buildingTab.widget);
-    // buildingTab.layout->addWidget(townHall, 0, Qt::AlignHCenter);
-
     const auto trackTab = FindOrCreateTab(tr("Tracks"));
     trackTab.layout->addWidget(new StraightTrack(trackTab.widget), 0, Qt::AlignHCenter);
     trackTab.layout->addWidget(new CurvedTrack(trackTab.widget), 0, Qt::AlignHCenter);
     trackTab.layout->addWidget(new LeftSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
     trackTab.layout->addWidget(new RightSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
     trackTab.layout->addWidget(new FlexTrack(trackTab.widget), 0, Qt::AlignHCenter);
+
+    const auto roadsTab = FindOrCreateTab(tr("Roads"));
+    roadsTab.layout->addWidget(new StraightRoadPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    roadsTab.layout->addWidget(new RoadTurnPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    roadsTab.layout->addWidget(new RoadIntersectionPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    roadsTab.layout->addWidget(new CrosswalkPlate(roadsTab.widget), 0, Qt::AlignHCenter);
 
     for (const auto& tab : _knownElementTabs)
         tab.layout->addStretch();

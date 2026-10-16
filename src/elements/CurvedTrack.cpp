@@ -25,7 +25,7 @@
 
 
 CurvedTrack::CurvedTrack(QWidget *parent)
-    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Curved Track (22.5°)"),
+    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Curved Track 53400 (22.5°)"),
                     QStringLiteral(":/images/CurvedTrack.png"),
                     QSize(17, 11), parent)
 {

@@ -26,7 +26,7 @@
 
 
 StraightTrack::StraightTrack(QWidget *parent)
-    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Straight Track"),
+    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Straight Track 53401"),
                     QStringLiteral(":/images/StrightTrack.png"), QSize(16, 8), parent)
 {
     initElementImage();

@@ -1015,7 +1015,8 @@ void TableDefinitionEditorView::panBy(const QPointF &offset)
     editor.sideStart += offset;
     editor.cursor += offset;
     for (CityLayoutElement *plate : _Projects.cityLayouts()) {
-        plate->move((QPointF(plate->pos()) + offset).toPoint());
+        // Keep the same fractional translation as the table and grid.
+        plate->setLayoutPosition(plate->layoutPosition() + offset);
     }
     _Projects.currentProject()->gridOrigin += offset;
     update();

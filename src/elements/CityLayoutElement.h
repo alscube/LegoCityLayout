@@ -42,13 +42,16 @@ public:
 
     QString name() const;
     QString resourcePath() const { return m_resourcePath; }
+
     // Compatibility accessors delegate all track behavior to CityLayoutTrack.
     bool isStraightTrack() const;
     bool isSwitchTrack() const;
     bool isFlexTrack() const;
     bool isTrack() const { return bool(m_track); }
+
     qreal flexBendDegrees() const;
     bool setFlexBendDegrees(qreal degrees);
+
     bool containsPoint(const QPoint &localPoint) const;
     void setSelectionHighlighted(bool highlighted);
     QSize plateSize() const { return m_plateSize; }

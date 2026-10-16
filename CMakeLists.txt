@@ -52,6 +52,14 @@ set(LAYOUT_SOURCES
     src/SettingsDialog.ui
     src/elements/StraightTrack.cpp
     src/elements/StraightTrack.h
+    src/elements/CrosswalkPlate.cpp
+    src/elements/CrosswalkPlate.h
+    src/elements/RoadIntersectionPlate.cpp
+    src/elements/RoadIntersectionPlate.h
+    src/elements/RoadTurnPlate.cpp
+    src/elements/RoadTurnPlate.h
+    src/elements/StraightRoadPlate.cpp
+    src/elements/StraightRoadPlate.h
     src/elements/CurvedTrack.cpp
     src/elements/CurvedTrack.h
     src/elements/LeftSwitchTrack.cpp
@@ -126,4 +134,10 @@ if(LEGO_BUILD_TESTS)
     target_compile_definitions(missing_elements_check PRIVATE ${APP_ELEMENT_DEFINITIONS})
     target_link_libraries(missing_elements_check PRIVATE Qt6::Widgets Qt6::Svg)
     add_test(NAME missing_elements COMMAND missing_elements_check -platform offscreen)
+
+    qt_add_executable(table_editor_placements_check tests/table_editor_placements.cpp ${TEST_LAYOUT_SOURCES})
+    target_include_directories(table_editor_placements_check PRIVATE src src/elements)
+    target_compile_definitions(table_editor_placements_check PRIVATE ${APP_ELEMENT_DEFINITIONS})
+    target_link_libraries(table_editor_placements_check PRIVATE Qt6::Widgets Qt6::Svg)
+    add_test(NAME table_editor_placements COMMAND table_editor_placements_check -platform offscreen)
 endif()

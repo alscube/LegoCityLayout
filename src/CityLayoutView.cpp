@@ -434,12 +434,20 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     qreal stepDegrees = layoutElement->rotationStepDegrees();
     const QString stepAngle = QString::number(stepDegrees);
 
-    QAction *clockwiseAction = menu.addAction(tr("Rotate Clockwise %1° (R)").arg(stepAngle));
-    QAction *counterclockwiseAction = menu.addAction(tr("Rotate Counterclockwise %1° (Shift+R)").arg(stepAngle));
+    const bool singleRotateOption =
+        layoutElement->resourcePath() == QStringLiteral(":/images/RoadPlate16x16.png")
+        || layoutElement->resourcePath() == QStringLiteral(":/images/CrosswalkPlate8x16.png");
+    const bool isRoadElement = singleRotateOption
+        || layoutElement->resourcePath() == QStringLiteral(":/images/RoadTurnPlate16x16.png")
+        || layoutElement->resourcePath() == QStringLiteral(":/images/RoadIntersectionPlate16x16.png");
+    QAction *clockwiseAction = menu.addAction(singleRotateOption
+        ? tr("Rotate 90") : tr("Rotate Clockwise %1° (R)").arg(stepAngle));
+    QAction *counterclockwiseAction = singleRotateOption ? nullptr
+        : menu.addAction(tr("Rotate Counterclockwise %1° (Shift+R)").arg(stepAngle));
 
     QAction *quarterClockwiseAction = nullptr;
     QAction *quarterCounterclockwiseAction = nullptr;
-    if (!qFuzzyCompare(stepDegrees, 90.0))
+    if (!singleRotateOption && !qFuzzyCompare(stepDegrees, 90.0))
     {   // if the stepDegrees is not 90, then we can add quarter rotation options
         if ( isStraightTrack )
         {
@@ -451,6 +459,9 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
             quarterCounterclockwiseAction = menu.addAction("Rotate Counterclockwise 90°");
         }
     }
+
+    QAction *customRotationAction = isRoadElement
+        ? menu.addAction(tr("Custom Rotation...")) : nullptr;
 
     menu.addSeparator();
 
@@ -480,6 +491,15 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
         rotateSelectedPlateByDegrees(90.0);
     } else if (quarterCounterclockwiseAction && chosenAction == quarterCounterclockwiseAction) {
         rotateSelectedPlateByDegrees(-90.0);
+    } else if (customRotationAction && chosenAction == customRotationAction) {
+        bool accepted = false;
+        const qreal currentAngle = layoutElement->rotationDegrees();
+        const qreal angle = QInputDialog::getDouble(this, tr("Custom Rotation"),
+            tr("Rotation angle (° clockwise):"), currentAngle, 0.0, 360.0, 2, &accepted);
+        const qreal difference = angle - currentAngle;
+        if (accepted && !qFuzzyIsNull(std::remainder(difference, 360.0))) {
+            rotateSelectedPlateByDegrees(difference);
+        }
     } else if (bendAction && chosenAction == bendAction) {
         bool accepted = false;
         const qreal degrees = QInputDialog::getDouble(this, tr("Flex Track Bend"),

@@ -22,7 +22,7 @@
 #include <QCoreApplication>
 
 RightSwitchTrack::RightSwitchTrack(QWidget *parent)
-    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Right Switch"),
+    : LayoutElement(QCoreApplication::translate("LayoutElementsView", "Right Switch 53404"),
                     QStringLiteral(":/images/RightSwitchTrack.png"),
                     QSize(qRound(LegoGrid::switchCanvasWidthStuds), qRound(LegoGrid::switchCanvasHeightStuds)), parent)
 {

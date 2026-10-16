@@ -492,57 +492,57 @@ bool ProjectView::openLayout(const QString &path)
             || !city.value("elements").isArray())))
         return fail(tr("Invalid city layout."));
 
-    struct Plate { QString name; QString resourcePath; QPixmap image; QSize size; QPointF position; qreal rotation; qreal flexBend; };
-    QList<Plate> plates;
+    struct Element { QString name; QString resourcePath; QPixmap image; QSize size; QPointF position; qreal rotation; qreal flexBend; };
+    QList<Element> elementList;
     QStringList missingTypes;
     int missingCount = 0;
     for (const auto &value : city.value("elements").toArray())
     {
-        QJsonObject element = value.toObject();
-        Plate plate;
-        plate.name = element.value("name").toString();
-        if (plate.name.trimmed().isEmpty()) return fail(tr("Invalid city element."));
-        const auto *definition = ElementCatalog::instance().byName(plate.name);
+        QJsonObject jsonElement = value.toObject();
+        Element element;
+        element.name = jsonElement.value("name").toString();
+        if (element.name.trimmed().isEmpty()) return fail(tr("Invalid city element."));
+        const auto *definition = ElementCatalog::instance().byName(element.name);
         if (!definition) {
             ++missingCount;
-            if (!missingTypes.contains(plate.name)) missingTypes.append(plate.name);
+            if (!missingTypes.contains(element.name)) missingTypes.append(element.name);
             continue;
         }
-        plate.name = definition->name;
-        plate.resourcePath = definition->resourcePath;
-        plate.size = definition->size;
-        plate.image.load(plate.resourcePath);
+        element.name = definition->name;
+        element.resourcePath = definition->resourcePath;
+        element.size = definition->size;
+        element.image.load(element.resourcePath);
         QPointF position;
         if (!readPoint(value, position) || qAbs(position.x()) > 10000000 || qAbs(position.y()) > 10000000)
             return fail(tr("Invalid plate position."));
-        plate.position = position;
-        plate.rotation = element.value("rotationDegrees").toDouble(-1);
+        element.position = position;
+        element.rotation = jsonElement.value("rotationDegrees").toDouble(-1);
 
-        if (element.contains("flexBendDegrees") && !element.value("flexBendDegrees").isDouble())
+        if (jsonElement.contains("flexBendDegrees") && !jsonElement.value("flexBendDegrees").isDouble())
             return fail(tr("Invalid flex track bend."));
 
-        plate.flexBend = element.value("flexBendDegrees").toDouble(0.0);
+        element.flexBend = jsonElement.value("flexBendDegrees").toDouble(0.0);
 
-        if (!std::isfinite(plate.rotation) || plate.rotation < 0 || plate.rotation >= 360 || plate.image.isNull())
+        if (!std::isfinite(element.rotation) || element.rotation < 0 || element.rotation >= 360 || element.image.isNull())
             return fail(tr("Invalid city element."));
 
-        const CityLayoutElement identity(plate.name, plate.image, plate.size,
-                                         LegoGrid::pixelsPerStud, 1.0, nullptr, plate.resourcePath);
+        const CityLayoutElement identity(element.name, element.image, element.size,
+                                         LegoGrid::pixelsPerStud, 1.0, nullptr, element.resourcePath);
 
-        if (!std::isfinite(plate.flexBend) || qAbs(plate.flexBend) > LegoGrid::flexMaximumBendDegrees
-            || (!identity.isFlexTrack() && !qFuzzyIsNull(plate.flexBend)))
+        if (!std::isfinite(element.flexBend) || qAbs(element.flexBend) > LegoGrid::flexMaximumBendDegrees
+            || (!identity.isFlexTrack() && !qFuzzyIsNull(element.flexBend)))
             return fail(tr("Invalid flex track bend."));
 
         // Track connections can align pieces between the manual rotation steps.
         // Preserve those saved angles; only baseplates require quarter turns.
         if (!identity.isTrack()) {
             const qreal rotationStep = identity.rotationStepDegrees();
-            const qreal rotationOffset = qAbs(plate.rotation / rotationStep - qRound(plate.rotation / rotationStep));
+            const qreal rotationOffset = qAbs(element.rotation / rotationStep - qRound(element.rotation / rotationStep));
             if (rotationOffset > 1e-9)
                 return fail(tr("Invalid city plate."));
         }
 
-        plates.append(plate);
+        elementList.append(element);
     }
 
     // Validate available elements before asking, and commit no project state
@@ -564,7 +564,7 @@ bool ProjectView::openLayout(const QString &path)
     project->zoomFactor = zoom;
     project->tableEditor.viewScale = zoom;
     project->gridOrigin = origin;
-    for (const auto &plate : plates) {
+    for (const auto &plate : elementList) {
         auto *element = new CityLayoutElement(plate.name, plate.image, plate.size, LegoGrid::pixelsPerStud, zoom, m_cityLayoutView, plate.resourcePath);
         element->setFlexBendDegrees(plate.flexBend);
         element->rotateByDegrees(plate.rotation);
