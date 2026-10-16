@@ -50,41 +50,33 @@ set(LAYOUT_SOURCES
     src/SettingsDialog.cpp
     src/SettingsDialog.h
     src/SettingsDialog.ui
-    src/elements/StraightTrack.cpp
-    src/elements/StraightTrack.h
-    src/elements/CrosswalkPlate.cpp
-    src/elements/CrosswalkPlate.h
-    src/elements/RoadIntersectionPlate.cpp
-    src/elements/RoadIntersectionPlate.h
-    src/elements/RoadTurnPlate.cpp
-    src/elements/RoadTurnPlate.h
-    src/elements/StraightRoadPlate.cpp
-    src/elements/StraightRoadPlate.h
-    src/elements/CurvedTrack.cpp
-    src/elements/CurvedTrack.h
-    src/elements/LeftSwitchTrack.cpp
-    src/elements/LeftSwitchTrack.h
-    src/elements/RightSwitchTrack.cpp
-    src/elements/RightSwitchTrack.h
-    src/elements/FlexTrack.cpp
-    src/elements/FlexTrack.h
+#    src/elements/StraightTrack.cpp
+#    src/elements/StraightTrack.h
+#    src/elements/CrosswalkPlate.cpp
+#    src/elements/CrosswalkPlate.h
+#    src/elements/RoadIntersectionPlate.cpp
+#    src/elements/RoadIntersectionPlate.h
+#    src/elements/RoadTurnPlate.cpp
+#    src/elements/RoadTurnPlate.h
+#    src/elements/StraightRoadPlate.cpp
+#    src/elements/StraightRoadPlate.h
+#    src/elements/CurvedTrack.cpp
+#    src/elements/CurvedTrack.h
+#    src/elements/LeftSwitchTrack.cpp
+#    src/elements/LeftSwitchTrack.h
+#    src/elements/RightSwitchTrack.cpp
+#    src/elements/RightSwitchTrack.h
+
+
     resources.qrc
 )
-    # src/elements/BasePlate16x32.cpp
-    # src/elements/BasePlate16x32.h
-    # src/elements/BasePlate16x32DarkStoneGray.cpp
-    # src/elements/BasePlate16x32DarkStoneGray.h
-    # src/elements/BasePlate16x32Tan.cpp
-    # src/elements/BasePlate16x32Tan.h
-    # src/elements/BasePlate32x32Green.cpp
-    # src/elements/BasePlate32x32Green.h
-    # src/elements/BasePlate48x48Gray.cpp
-    # src/elements/BasePlate48x48Gray.h
+
 
 qt_add_executable(LegoCityLayout ${LAYOUT_SOURCES})
 
 target_include_directories(LegoCityLayout PRIVATE src src/elements)
 target_compile_definitions(LegoCityLayout PRIVATE LEGO_PLATES_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/Elements/Plates")
+target_compile_definitions(LegoCityLayout PRIVATE LEGO_BUILDINGS_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/Elements/Buildings")
 
 # Keep editable plate definitions next to packaged applications as well.
 if(APPLE)
@@ -140,4 +132,14 @@ if(LEGO_BUILD_TESTS)
     target_compile_definitions(table_editor_placements_check PRIVATE ${APP_ELEMENT_DEFINITIONS})
     target_link_libraries(table_editor_placements_check PRIVATE Qt6::Widgets Qt6::Svg)
     add_test(NAME table_editor_placements COMMAND table_editor_placements_check -platform offscreen)
+    qt_add_executable(horizontal_plates_check tests/horizontal_plates.cpp ${TEST_LAYOUT_SOURCES})
+    target_include_directories(horizontal_plates_check PRIVATE src src/elements)
+    target_compile_definitions(horizontal_plates_check PRIVATE ${APP_ELEMENT_DEFINITIONS})
+    target_link_libraries(horizontal_plates_check PRIVATE Qt6::Widgets Qt6::Svg)
+    add_test(NAME horizontal_plates COMMAND horizontal_plates_check -platform offscreen)
+    qt_add_executable(deletion_undo_check tests/deletion_undo.cpp ${TEST_LAYOUT_SOURCES})
+    target_include_directories(deletion_undo_check PRIVATE src src/elements)
+    target_compile_definitions(deletion_undo_check PRIVATE ${APP_ELEMENT_DEFINITIONS})
+    target_link_libraries(deletion_undo_check PRIVATE Qt6::Widgets Qt6::Svg)
+    add_test(NAME deletion_undo COMMAND deletion_undo_check -platform offscreen)
 endif()

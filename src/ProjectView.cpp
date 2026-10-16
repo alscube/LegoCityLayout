@@ -508,7 +508,7 @@ bool ProjectView::openLayout(const QString &path)
             if (!missingTypes.contains(element.name)) missingTypes.append(element.name);
             continue;
         }
-        element.name = definition->name;
+        element.name = definition->displayName;
         element.resourcePath = definition->resourcePath;
         element.size = definition->size;
         element.image.load(element.resourcePath);

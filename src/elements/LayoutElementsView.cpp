@@ -22,44 +22,21 @@
 
 #include "ElementCatalog.h"
 
-#include "StraightTrack.h"
-#include "CurvedTrack.h"
-#include "LeftSwitchTrack.h"
-#include "RightSwitchTrack.h"
-#include "FlexTrack.h"
+// #include "StraightTrack.h"
+// #include "CurvedTrack.h"
+// #include "LeftSwitchTrack.h"
+// #include "RightSwitchTrack.h"
+// #include "FlexTrack.h"
 
-#include "StraightRoadPlate.h"
-#include "RoadTurnPlate.h"
-#include "RoadIntersectionPlate.h"
-#include "CrosswalkPlate.h"
+// #include "StraightRoadPlate.h"
+// #include "RoadTurnPlate.h"
+// #include "RoadIntersectionPlate.h"
+// #include "CrosswalkPlate.h"
 
 #include <QTabWidget>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QMap>
-
-
-namespace {
-class PlateElement final : public LayoutElement
-{
-public:
-    PlateElement(const ElementDefinition &definition, QWidget *parent)
-        : LayoutElement(definition.displayName, definition.resourcePath, definition.size, parent)
-        , m_previewScale(definition.previewScale)
-    {
-        initElementImage();
-    }
-
-protected:
-    QPixmap loadElementImage(const QString &path, qreal = 0.0) override
-    {
-        return LayoutElement::loadElementImage(path, m_previewScale);
-    }
-
-private:
-    qreal m_previewScale;
-};
-}
 
 
 LayoutElementsView::LayoutElementsView(QWidget *parent)
@@ -88,6 +65,7 @@ struct NewTab LayoutElementsView::FindOrCreateTab( const QString& name )
     return result;
 }
 
+
 void LayoutElementsView::addLayoutElements()
 {
     if (layout()) return;
@@ -100,28 +78,29 @@ void LayoutElementsView::addLayoutElements()
     layout->addWidget( _elementTab);
 
     // Generic way of loading Elements from a directory
-    QList<ElementDefinition> elements = ElementCatalog::instance().loadAllElements();
+    QList<ElementDefinition>& elements = ElementCatalog::instance().loadAllElements();
     for (const auto& element : elements)
     {
         if (element.tabName.isEmpty())
             continue;
 
         const auto tab = FindOrCreateTab(element.tabName);
-        tab.layout->addWidget(new PlateElement(element, tab.widget), 0, Qt::AlignHCenter);
+        tab.layout->addWidget(new LayoutElement(element, tab.widget), 0, Qt::AlignHCenter);
     }
 
-    const auto trackTab = FindOrCreateTab(tr("Tracks"));
-    trackTab.layout->addWidget(new StraightTrack(trackTab.widget), 0, Qt::AlignHCenter);
-    trackTab.layout->addWidget(new CurvedTrack(trackTab.widget), 0, Qt::AlignHCenter);
-    trackTab.layout->addWidget(new LeftSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
-    trackTab.layout->addWidget(new RightSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
-    trackTab.layout->addWidget(new FlexTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    // ElementDefinition& elementdef = internalElementsList[0];
+    // const auto trackTab = FindOrCreateTab(tr("Tracks"));
+    // trackTab.layout->addWidget(new StraightTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    // trackTab.layout->addWidget(new CurvedTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    // trackTab.layout->addWidget(new LeftSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    // trackTab.layout->addWidget(new RightSwitchTrack(trackTab.widget), 0, Qt::AlignHCenter);
+    // trackTab.layout->addWidget(new FlexTrack(trackTab.widget), 0, Qt::AlignHCenter);
 
-    const auto roadsTab = FindOrCreateTab(tr("Roads"));
-    roadsTab.layout->addWidget(new StraightRoadPlate(roadsTab.widget), 0, Qt::AlignHCenter);
-    roadsTab.layout->addWidget(new RoadTurnPlate(roadsTab.widget), 0, Qt::AlignHCenter);
-    roadsTab.layout->addWidget(new RoadIntersectionPlate(roadsTab.widget), 0, Qt::AlignHCenter);
-    roadsTab.layout->addWidget(new CrosswalkPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    // const auto roadsTab = FindOrCreateTab(tr("Roads"));
+    // roadsTab.layout->addWidget(new StraightRoadPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    // roadsTab.layout->addWidget(new RoadTurnPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    // roadsTab.layout->addWidget(new RoadIntersectionPlate(roadsTab.widget), 0, Qt::AlignHCenter);
+    // roadsTab.layout->addWidget(new CrosswalkPlate(roadsTab.widget), 0, Qt::AlignHCenter);
 
     for (const auto& tab : _knownElementTabs)
         tab.layout->addStretch();

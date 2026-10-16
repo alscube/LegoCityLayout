@@ -32,6 +32,7 @@
 #include <QDropEvent>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QMenu>
 #include <QInputDialog>
 #include <QMimeData>
@@ -52,6 +53,16 @@ constexpr qreal maximumZoom = 24.0;
 constexpr int snapDistance = 6;
 constexpr qreal gridSpacing = LegoGrid::plateSpacing;
 constexpr qreal pixelsPerStud = LegoGrid::pixelsPerStud;
+
+bool isNonRotatableBasePlate(const CityLayoutElement *element)
+{
+    if (!element) return false;
+    const QSize size = element->plateSize();
+    if (size != QSize(32, 32) && size != QSize(48, 48)) return false;
+    const auto *definition = ElementCatalog::instance().byResource(element->resourcePath());
+    return definition && definition->tabName == QStringLiteral("Plates");
+}
+
 }
 
 
@@ -108,13 +119,15 @@ void CityLayoutView::dragEnterEvent(QDragEnterEvent *event)
 
 void CityLayoutView::dropEvent(QDropEvent *event)
 {
-    if (!_Projects.currentProject()) { event->ignore(); return; }
-    const QString resourcePath = QString::fromUtf8(
-        event->mimeData()->data(layoutElementMimeType));
-    const QString name = QString::fromUtf8(
-        event->mimeData()->data(layoutElementNameMimeType));
-    const QJsonObject sizeData = QJsonDocument::fromJson(
-        event->mimeData()->data(layoutElementSizeMimeType)).object();
+    if (!_Projects.currentProject())
+    {
+        event->ignore();
+        return;
+    }
+
+    const QString resourcePath = QString::fromUtf8(event->mimeData()->data(layoutElementMimeType));
+    const QString name = QString::fromUtf8(event->mimeData()->data(layoutElementNameMimeType));
+    const QJsonObject sizeData = QJsonDocument::fromJson(event->mimeData()->data(layoutElementSizeMimeType)).object();
     const QSize plateSize(sizeData.value(QStringLiteral("widthStuds")).toInt(),
                           sizeData.value(QStringLiteral("heightStuds")).toInt());
     const QPixmap pixmap(resourcePath);
@@ -126,6 +139,10 @@ void CityLayoutView::dropEvent(QDropEvent *event)
     auto *layoutElement = new CityLayoutElement(
         name, pixmap, plateSize, pixelsPerStud,
         _Projects.currentProject()->zoomFactor, this, resourcePath);
+
+    const qreal initialRotation = sizeData.value(QStringLiteral("rotationDegrees")).toDouble();
+    if (std::isfinite(initialRotation) && initialRotation != 0.0)
+        layoutElement->rotateByDegrees(initialRotation);
 
     const QPoint requestedPosition = event->position().toPoint()
                                      - QPoint(layoutElement->width() / 2,
@@ -297,9 +314,25 @@ void CityLayoutView::panBy(const QPoint &offset)
 }
 
 
+bool CityLayoutView::undoDeletion()
+{
+    auto *project = _Projects.currentProject();
+    if (!project || !_Projects.cityLayouts().undoDeletion(this, project->gridOrigin, project->zoomFactor))
+        return false;
+    ++project->changeRevision;
+    setFocus(Qt::OtherFocusReason);
+    update();
+    return true;
+}
+
 void CityLayoutView::keyPressEvent(QKeyEvent *event)
 {
     if (!_Projects.currentProject()) { event->ignore(); return; }
+    if (event->matches(QKeySequence::Undo)) {
+        undoDeletion();
+        event->accept();
+        return;
+    }
     if (!(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
         const bool add = event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal;
         const bool remove = event->key() == Qt::Key_Minus;
@@ -321,9 +354,10 @@ void CityLayoutView::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_Delete )
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace)
     {
-        if ( _Projects.cityLayouts().deleteSelectedElement() )
+        if ( _Projects.cityLayouts().deleteSelectedElement(
+                _Projects.currentProject()->gridOrigin, _Projects.currentProject()->zoomFactor) )
         {
             ++_Projects.currentProject()->changeRevision;
             event->accept();
@@ -422,7 +456,12 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     if (!_Projects.currentProject()) { event->ignore(); return; }
     CityLayoutElement* layoutElement{ _Projects.cityLayouts().elementAt(event->pos()) };
     if (!layoutElement) {
-        QWidget::contextMenuEvent(event);
+        QMenu menu(this);
+        QAction *undoAction = menu.addAction(tr("Undo Delete"));
+        undoAction->setEnabled(_Projects.cityLayouts().canUndoDeletion());
+        undoAction->setShortcut(QKeySequence::Undo);
+        if (menu.exec(event->globalPos()) == undoAction) undoDeletion();
+        event->accept();
         return;
     }
 
@@ -430,24 +469,43 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
     _Projects.cityLayouts().setSelectedElement(layoutElement);
 
     QMenu menu(this);
+    QAction *undoAction = menu.addAction(tr("Undo Delete"));
+    undoAction->setEnabled(_Projects.cityLayouts().canUndoDeletion());
+    undoAction->setShortcut(QKeySequence::Undo);
+    menu.addSeparator();
     const bool isStraightTrack = layoutElement->isStraightTrack();
     qreal stepDegrees = layoutElement->rotationStepDegrees();
     const QString stepAngle = QString::number(stepDegrees);
 
-    const bool singleRotateOption =
+    const auto *element = ElementCatalog::instance().byResource(layoutElement->resourcePath());
+    const QSize plateSize = layoutElement->plateSize();
+
+    const bool isRectangularBasePlate = element && element->tabName == QStringLiteral("Plates")
+                                        && (plateSize == QSize(16,8) || plateSize == QSize(32,16));
+
+    const bool isStraightRoadOrCrosswalk =
         layoutElement->resourcePath() == QStringLiteral(":/images/RoadPlate16x16.png")
         || layoutElement->resourcePath() == QStringLiteral(":/images/CrosswalkPlate8x16.png");
-    const bool isRoadElement = singleRotateOption
+
+    const bool singleRotateOption = isRectangularBasePlate || isStraightRoadOrCrosswalk;
+    const bool rotationAllowed = !isNonRotatableBasePlate(layoutElement);
+
+    const bool customRotationOnly = layoutElement->resourcePath() == QStringLiteral(":/images/RoadIntersectionPlate16x16.png");
+
+    const bool isRoadElement = isStraightRoadOrCrosswalk
         || layoutElement->resourcePath() == QStringLiteral(":/images/RoadTurnPlate16x16.png")
         || layoutElement->resourcePath() == QStringLiteral(":/images/RoadIntersectionPlate16x16.png");
-    QAction *clockwiseAction = menu.addAction(singleRotateOption
-        ? tr("Rotate 90") : tr("Rotate Clockwise %1° (R)").arg(stepAngle));
-    QAction *counterclockwiseAction = singleRotateOption ? nullptr
+
+    QAction *clockwiseAction = (!rotationAllowed || customRotationOnly) ? nullptr
+        : menu.addAction(singleRotateOption
+            ? tr("Rotate 90") : tr("Rotate Clockwise %1° (R)").arg(stepAngle));
+
+    QAction *counterclockwiseAction = (!rotationAllowed || singleRotateOption || customRotationOnly) ? nullptr
         : menu.addAction(tr("Rotate Counterclockwise %1° (Shift+R)").arg(stepAngle));
 
     QAction *quarterClockwiseAction = nullptr;
     QAction *quarterCounterclockwiseAction = nullptr;
-    if (!singleRotateOption && !qFuzzyCompare(stepDegrees, 90.0))
+    if (rotationAllowed && !customRotationOnly && !singleRotateOption && !qFuzzyCompare(stepDegrees, 90.0))
     {   // if the stepDegrees is not 90, then we can add quarter rotation options
         if ( isStraightTrack )
         {
@@ -460,10 +518,10 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
         }
     }
 
-    QAction *customRotationAction = isRoadElement
+    QAction *customRotationAction = (rotationAllowed && isRoadElement)
         ? menu.addAction(tr("Custom Rotation...")) : nullptr;
 
-    menu.addSeparator();
+    if (rotationAllowed) menu.addSeparator();
 
     QAction *bendAction = nullptr;
     QAction *straightenAction = nullptr;
@@ -483,7 +541,9 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
 
     QAction *deleteAction = menu.addAction(tr("Delete"));
     QAction *chosenAction = menu.exec(event->globalPos());
-    if (chosenAction == clockwiseAction) {
+    if (chosenAction == undoAction) {
+        undoDeletion();
+    } else if (clockwiseAction && chosenAction == clockwiseAction) {
         rotateSelectedPlate(1);
     } else if (counterclockwiseAction && chosenAction == counterclockwiseAction) {
         rotateSelectedPlate(-1);
@@ -524,7 +584,8 @@ void CityLayoutView::contextMenuEvent(QContextMenuEvent *event)
             ++_Projects.currentProject()->changeRevision;
         }
     } else if (chosenAction == deleteAction) {
-        if (_Projects.cityLayouts().deleteSelectedElement()) {
+        if (_Projects.cityLayouts().deleteSelectedElement(
+                _Projects.currentProject()->gridOrigin, _Projects.currentProject()->zoomFactor)) {
             ++_Projects.currentProject()->changeRevision;
         }
     }
@@ -672,7 +733,7 @@ void CityLayoutView::rotateSelectedPlateByDegrees(qreal degrees)
 {
     if (!_Projects.currentProject()) return;
     CityLayoutElement *plate = _Projects.cityLayouts().selectedElement();
-    if (!plate) return;
+    if (!plate || isNonRotatableBasePlate(plate)) return;
     plate->rotateByDegrees(degrees);
     if (_Projects.tableEditor().snapToGrid || !plate->trackConnections().isEmpty()) {
         plate->setLayoutPosition(snappedPosition(plate->layoutPosition(), plate));

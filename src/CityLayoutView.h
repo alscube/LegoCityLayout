@@ -72,11 +72,14 @@ protected:
 //    void leaveEvent(QEvent *event) override;
 
 private:
+    bool undoDeletion();
     void panBy(const QPoint &offset);
     void rotateSelectedPlate(int steps);
     void rotateSelectedPlateByDegrees(qreal degrees);
 
     LoadedProjects &_Projects;
+    ProjectData *m_studProject = nullptr;
+
     QPoint m_dragOffset;
     QPoint m_mousePressPosition;
     QPoint m_lastPanPosition;
@@ -91,5 +94,4 @@ private:
     QPainterPath m_studSurface;
     QPointF m_studOrigin;
     qreal m_studZoom = 0.0;
-    ProjectData *m_studProject = nullptr;
 };

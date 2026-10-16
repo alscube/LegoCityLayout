@@ -88,17 +88,19 @@ void MainWindow::SetupMainMenu( )
     connect(openLastAction, &QAction::triggered, _projectView, &ProjectView::openLastLayout);
 
     fileMenu->addSeparator();
-    QAction *closeProjectAction = fileMenu->addAction(tr("&Close Layout..."));
-    closeProjectAction->setShortcut(QKeySequence::Close);
-    connect(closeProjectAction, &QAction::triggered,
-            _projectView, &ProjectView::closeProject);
 
     QAction *saveTableAction = fileMenu->addAction(tr("&Save Layout..."));
     saveTableAction->setShortcut(QKeySequence::Save);
     connect(saveTableAction, &QAction::triggered,
             _projectView, &ProjectView::saveTableDefinition);
 
+    QAction *closeProjectAction = fileMenu->addAction(tr("&Close Layout..."));
+    closeProjectAction->setShortcut(QKeySequence::Close);
+    connect(closeProjectAction, &QAction::triggered,
+            _projectView, &ProjectView::closeProject);
+
     fileMenu->addSeparator();
+
     auto *quitAction = fileMenu->addAction(tr("&Quit"));
     quitAction->setShortcut(QKeySequence::Quit);
     quitAction->setMenuRole(QAction::QuitRole);
@@ -132,10 +134,10 @@ void MainWindow::SetupMainMenu( )
         }
     });
 
-    QMenu *settingsMenu = menuBar()->addMenu(tr("&Settings"));
-    QAction *settingsAction = settingsMenu->addAction(tr("Settings..."));
-    settingsAction->setMenuRole(QAction::PreferencesRole);
-    connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
+    // QMenu *settingsMenu = menuBar()->addMenu(tr("&Settings"));
+    // QAction *settingsAction = settingsMenu->addAction(tr("Settings..."));
+    // settingsAction->setMenuRole(QAction::PreferencesRole);
+    // connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
 
     connect(_projectView, &ProjectView::openLayoutRequested,
             _projectView, &ProjectView::promptToOpenLayout);

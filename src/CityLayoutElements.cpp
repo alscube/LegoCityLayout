@@ -21,6 +21,7 @@
 
 #include "CityLayoutElement.h"
 #include "CityLayoutView.h"
+#include "LegoGrid.h"
 
 #include "QApplication"
 #include "QMouseEvent"
@@ -33,6 +34,7 @@ void CityLayoutElements::initializeCityElements(const QString &title)
         delete takeLast();
     }
 
+    m_deletedElements.clear();
     _SelectedElement = nullptr;
     _DraggedElement = nullptr;
 }
@@ -88,17 +90,35 @@ void CityLayoutElements::updateElementHighLite(CityLayoutElement* element)
 }
 
 
-bool CityLayoutElements::deleteSelectedElement( )
+bool CityLayoutElements::deleteSelectedElement(const QPointF &gridOrigin, qreal zoom)
 {
     CityLayoutElement *image = selectedElement();
-    if (image) {
-        deleteImage(image);
-        return true;
-    }
+    if (!image || !contains(image)) return false;
 
-    return false;
+    m_deletedElements.append({image->name(), image->resourcePath(), image->sourcePixmap(),
+        image->plateSize(), (image->layoutPosition() - gridOrigin) / zoom,
+        image->rotationDegrees(), image->flexBendDegrees(), indexOf(image)});
+    deleteImage(image);
+    return true;
 }
 
+bool CityLayoutElements::undoDeletion(QWidget *parent, const QPointF &gridOrigin, qreal zoom)
+{
+    if (m_deletedElements.isEmpty()) return false;
+    const DeletedElement deleted = m_deletedElements.takeLast();
+    auto *image = new CityLayoutElement(deleted.name, deleted.artwork, deleted.plateSize,
+        LegoGrid::pixelsPerStud, zoom, parent, deleted.resourcePath);
+    image->setFlexBendDegrees(deleted.flexBend);
+    image->rotateByDegrees(deleted.rotation);
+    image->setLayoutPosition(gridOrigin + deleted.projectPosition * zoom);
+    insert(qMin(deleted.index, size()), image);
+    // Match widget stacking to the list used for painting, hit testing and saving.
+    for (auto *element : *this) element->raise();
+    image->show();
+    setDraggedElement(nullptr);
+    setSelectedElement(image);
+    return true;
+}
 
 bool CityLayoutElements::bringSelectedToFront()
 {

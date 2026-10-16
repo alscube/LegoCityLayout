@@ -19,6 +19,9 @@
 
 #include <QList>
 #include <QString>
+#include <QPixmap>
+#include <QPointF>
+#include <QSize>
 
 
 class CityLayoutElement;
@@ -44,7 +47,9 @@ public:
 
     void updateElementHighLite(CityLayoutElement* element);
 
-    bool deleteSelectedElement( );
+    bool deleteSelectedElement(const QPointF &gridOrigin, qreal zoom);
+    bool canUndoDeletion() const { return !m_deletedElements.isEmpty(); }
+    bool undoDeletion(QWidget *parent, const QPointF &gridOrigin, qreal zoom);
     bool bringSelectedToFront();
     bool sendSelectedToBack();
 
@@ -62,6 +67,17 @@ public:
     void deleteImage(CityLayoutElement *image);
 
 private:
+    struct DeletedElement {
+        QString name;
+        QString resourcePath;
+        QPixmap artwork;
+        QSize plateSize;
+        QPointF projectPosition;
+        qreal rotation;
+        qreal flexBend;
+        qsizetype index;
+    };
+    QList<DeletedElement> m_deletedElements;
     CityLayoutElement *_SelectedElement = nullptr;
     CityLayoutElement *_DraggedElement = nullptr;
 };

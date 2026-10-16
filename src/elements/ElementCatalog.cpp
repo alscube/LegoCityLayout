@@ -30,6 +30,11 @@
 #include <cmath>
 
 
+#define TAB_NAME 0
+#define IMAGE_SIZE 1
+#define DISPLAY_NAME 2
+#define PREVIEW_SCALE 3
+
 
 ElementCatalog &ElementCatalog::instance()
 {
@@ -37,24 +42,32 @@ ElementCatalog &ElementCatalog::instance()
     return catalog;
 }
 
+
 ElementCatalog::ElementCatalog()
 {
-    // Track info is added here becuase it is not loaded from external files
+}
+
+
+void ElementCatalog::InternalElements( )
+{
+    // Track/Road info is added here becuase it is not loaded from external files
 
     _allLoadedElements.append({
-        {QStringLiteral("Straight Track 53401"), QStringLiteral(":/images/StrightTrack.png"), QSize(16,8)},
-        {QStringLiteral("Curved Track 53400 (22.5°)"), QStringLiteral(":/images/CurvedTrack.png"), QSize(17,11)},
+        {QStringLiteral("Straight Track 53401"), QStringLiteral(":/images/StrightTrack.png"), QSize(16,8), "Tracks", 0.50},
+        {QStringLiteral("Curved Track 53400 (22.5°)"), QStringLiteral(":/images/CurvedTrack.png"), QSize(17,11), "Tracks", 0.50},
         {QStringLiteral("Left Switch 53407"), QStringLiteral(":/images/LeftSwitchTrack.png"),
-            QSize(qRound(LegoGrid::switchCanvasWidthStuds),qRound(LegoGrid::switchCanvasHeightStuds))},
+         QSize(qRound(LegoGrid::switchCanvasWidthStuds),qRound(LegoGrid::switchCanvasHeightStuds)), "Tracks", 0.50},
         {QStringLiteral("Right Switch 53404"), QStringLiteral(":/images/RightSwitchTrack.png"),
-            QSize(qRound(LegoGrid::switchCanvasWidthStuds),qRound(LegoGrid::switchCanvasHeightStuds))},
-        {QStringLiteral("Flex Track 64022"), QStringLiteral(":/images/FlexTrack.png"), QSize(8,10)},
-        {QStringLiteral("Straight Road 60304"), QStringLiteral(":/images/RoadPlate16x16.png"), QSize(16,16)},
-        {QStringLiteral("Road Turn 60304"), QStringLiteral(":/images/RoadTurnPlate16x16.png"), QSize(16,16)},
-        {QStringLiteral("Road Intersection 60304"), QStringLiteral(":/images/RoadIntersectionPlate16x16.png"), QSize(16,16)},
-        {QStringLiteral("Crosswalk 60304"), QStringLiteral(":/images/CrosswalkPlate8x16.png"), QSize(16,8)}
+         QSize(qRound(LegoGrid::switchCanvasWidthStuds),qRound(LegoGrid::switchCanvasHeightStuds)), "Tracks", 0.50},
+        {QStringLiteral("Flex Track 64022"), QStringLiteral(":/images/FlexTrack.png"), QSize(8,10), "Tracks", 0.50},
+
+        {QStringLiteral("Straight Road 60304"), QStringLiteral(":/images/RoadPlate16x16.png"), QSize(16,16), "Roads", 0.50},
+        {QStringLiteral("Road Turn 60304"), QStringLiteral(":/images/RoadTurnPlate16x16.png"), QSize(16,16), "Roads", 0.50},
+        {QStringLiteral("Road Intersection 60304"), QStringLiteral(":/images/RoadIntersectionPlate16x16.png"), QSize(16,16), "Roads", 0.50},
+        {QStringLiteral("Crosswalk 60304"), QStringLiteral(":/images/CrosswalkPlate8x16.png"), QSize(16,8), "Roads", 0.50}
     });
 }
+
 
 void ElementCatalog::warning( const QString &message ) const
 {
@@ -77,6 +90,7 @@ QString ElementCatalog::plateDirectory() const
 
     return {};
 }
+
 
 QList<ElementDefinition> ElementCatalog::loadPlates()
 {
@@ -138,22 +152,22 @@ QList<ElementDefinition> ElementCatalog::loadElements(const QString &directory) 
         }
 
         QTextStream input(&file);
-        QStringList lines;
-        while (!input.atEnd()) lines.append(input.readLine().trimmed());
-        while (!lines.isEmpty() && lines.last().isEmpty()) lines.removeLast();
-        if (lines.size() != 4 || lines[0].isEmpty() || lines[2].isEmpty())
+        QStringList infoData;
+        while (!input.atEnd()) infoData.append(input.readLine().trimmed());
+        while (!infoData.isEmpty() && infoData.last().isEmpty()) infoData.removeLast();
+        if (infoData.size() != 4 || infoData[TAB_NAME].isEmpty() || infoData[DISPLAY_NAME].isEmpty())
         {
             reject("expected tab, width,height, label, and preview scale on four lines");
             continue;
         }
 
-        const auto dimensions = lines[1].split(',');
+        const auto dimensions = infoData[IMAGE_SIZE].split(',');
         bool widthOk = false;
         bool heightOk = false;
         bool scaleOk = false;
         const int width = dimensions.value(0).trimmed().toInt(&widthOk);
         const int height = dimensions.value(1).trimmed().toInt(&heightOk);
-        const qreal scale = lines[3].toDouble(&scaleOk);
+        const qreal scale = infoData[PREVIEW_SCALE].toDouble(&scaleOk);
         if (dimensions.size() != 2 || !widthOk || !heightOk || width <= 0 || height <= 0
             || !scaleOk || !std::isfinite(scale) || scale < 0)
         {
@@ -169,23 +183,24 @@ QList<ElementDefinition> ElementCatalog::loadElements(const QString &directory) 
             continue;
         }
 
-        const QString type = info.completeBaseName();
+        const QString displayName = infoData[DISPLAY_NAME];
         bool duplicate = false;
-        for (const auto &plate : loadedElements)
-            duplicate |= plate.name == type;
+        for (const auto &element : loadedElements)
+            duplicate |= element.displayName == displayName;
+
         if (duplicate)
         {
-            reject("Duplicate element type: " + type);
+            reject("Duplicate element type: " + displayName);
             continue;
         }
 
-        loadedElements.append(ElementDefinition{type, imagePath, QSize(width, height), lines[0], lines[2], scale});
+        loadedElements.append(ElementDefinition{displayName, imagePath, QSize(width, height), infoData[TAB_NAME], scale});
     }
     return loadedElements;
 }
 
 
-QList<ElementDefinition> ElementCatalog::loadAllElements()
+QList<ElementDefinition>& ElementCatalog::loadAllElements()
 {
     _plateElements = loadElements(plateDirectory());
     _allLoadedElements.append(_plateElements);
@@ -193,11 +208,13 @@ QList<ElementDefinition> ElementCatalog::loadAllElements()
     _buildingsElements = loadElements(buildingsDirectory());
     _allLoadedElements.append(_buildingsElements);
 
+    InternalElements();
+
     return _allLoadedElements;
 }
 
 
-const QList<ElementDefinition> &ElementCatalog::allLoadedElements() const
+const QList<ElementDefinition>& ElementCatalog::allLoadedElements() const
 {
     return _allLoadedElements;
 }
@@ -206,10 +223,16 @@ const QList<ElementDefinition> &ElementCatalog::allLoadedElements() const
 const ElementDefinition *ElementCatalog::byName(const QString &name) const
 {
      for (const auto &element : _allLoadedElements)
-        if (element.name == name) return &element;
-    // Palette labels originate in .info files and may be saved by the current UI.
-    for (const auto &element : _allLoadedElements)
-        if (!element.displayName.isEmpty() && element.displayName == name) return &element;
+        if (element.displayName == name)
+             return &element;
+
+    // // Palette labels originate in .info files and may be saved by the current UI.
+    // for (const auto &element : _allLoadedElements)
+    // {
+    //     if (!element.displayName.isEmpty() && element.displayName == name)
+    //         return &element;
+    // }
+
     return nullptr;
 }
 

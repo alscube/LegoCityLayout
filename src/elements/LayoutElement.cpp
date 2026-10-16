@@ -37,28 +37,23 @@ constexpr int dragThumbnailSize = 120;
 
 }
 
-LayoutElement::LayoutElement(const QString &name,
-                                         const QString &resourcePath,
-                                         const QSize &plateSize,
-                                         QWidget *parent)
+LayoutElement::LayoutElement( const ElementDefinition& element, QWidget *parent)
     : QWidget(parent)
-    , m_name(name)
-    , m_resourcePath(resourcePath)
-    , m_plateSize(plateSize)
+    , _elementDefinition(element)
 {
-    // this needs to be called in final constructor so
-    // it can be overridden by derived classes for custom
-    // image scaling
-
-    // initElementImage();
+    initElementImage();
 }
 
 
 void LayoutElement::initElementImage( )
 {
-    if (layout()) {
+    if (layout())
+    {
         auto *image = qobject_cast<QLabel *>(layout()->itemAt(0)->widget());
-        if (image) image->setPixmap(loadElementImage(m_resourcePath));
+
+        if (image)
+            image->setPixmap( loadElementImage() );
+
         return;
     }
 
@@ -73,10 +68,10 @@ void LayoutElement::initElementImage( )
     image->setAttribute(Qt::WA_TransparentForMouseEvents);
     image->setAlignment(Qt::AlignCenter);
 
-    QPixmap elementImage = loadElementImage(m_resourcePath);
+    QPixmap elementImage = loadElementImage( );
     image->setPixmap(elementImage);
 
-    auto *label = new QLabel(m_name, this);
+    auto *label = new QLabel(_elementDefinition.displayName, this);
     label->setAttribute(Qt::WA_TransparentForMouseEvents);
     label->setAlignment(Qt::AlignCenter);
 
@@ -85,18 +80,18 @@ void LayoutElement::initElementImage( )
 }
 
 
-QPixmap LayoutElement::loadElementImage( const QString& resourcePath, qreal previewScale )
+QPixmap LayoutElement::loadElementImage( )
 {
-    QPixmap elementImage(resourcePath);
+    QPixmap elementImage(_elementDefinition.resourcePath);
 
     // Keep large source assets from expanding beyond the window.
     if (elementImage.width() > MAX_WIDTH || elementImage.height() > MAX_HEIGHT) {
         elementImage = elementImage.scaled(QSize(MAX_WIDTH, MAX_HEIGHT), Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
-    if ( previewScale > 0.0 )
+    if ( _elementDefinition.previewScale > 0.0 )
     {
-        elementImage = elementImage.scaled(elementImage.size() * previewScale, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        elementImage = elementImage.scaled(elementImage.size() * _elementDefinition.previewScale, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
     return elementImage;
@@ -122,17 +117,19 @@ void LayoutElement::mouseMoveEvent(QMouseEvent *event)
     }
 
     auto *mimeData = new QMimeData;
-    mimeData->setData(layoutElementMimeType, m_resourcePath.toUtf8());
-    mimeData->setData(layoutElementNameMimeType, m_name.toUtf8());
+    mimeData->setData(layoutElementMimeType, _elementDefinition.resourcePath.toUtf8());
+    mimeData->setData(layoutElementNameMimeType, _elementDefinition.displayName.toUtf8());
     mimeData->setData(layoutElementSizeMimeType, QJsonDocument(QJsonObject{
-        {QStringLiteral("widthStuds"), m_plateSize.width()},
-        {QStringLiteral("heightStuds"), m_plateSize.height()}}).toJson(QJsonDocument::Compact));
+        {QStringLiteral("widthStuds"), _elementDefinition.size.width()},
+        {QStringLiteral("heightStuds"), _elementDefinition.size.height()}}).toJson(QJsonDocument::Compact));
 
     auto *drag = new QDrag(this);
     drag->setMimeData(mimeData);
 
-    const QPixmap sourcePixmap(m_resourcePath);
-    if (!sourcePixmap.isNull()) {
+    const QPixmap sourcePixmap(_elementDefinition.resourcePath);
+
+    if (!sourcePixmap.isNull())
+    {
         const QPixmap thumbnail = sourcePixmap.scaled(
             QSize(dragThumbnailSize, dragThumbnailSize),
             Qt::KeepAspectRatio,
@@ -151,3 +148,4 @@ void LayoutElement::mouseReleaseEvent(QMouseEvent *event)
     setCursor(Qt::OpenHandCursor);
     QWidget::mouseReleaseEvent(event);
 }
+

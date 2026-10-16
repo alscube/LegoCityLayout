@@ -23,13 +23,13 @@
 #include <QList>
 
 struct ElementDefinition {
-    QString name;
+    QString displayName;
     QString resourcePath;
     QSize size;
     QString tabName;
-    QString displayName;
     qreal previewScale = 0.0;
 };
+
 
 // SINGLETON
 // Stable, untranslated type names identify the app's current element definitions.
@@ -43,17 +43,7 @@ public:
     ElementCatalog(ElementCatalog &&) = delete;
     ElementCatalog &operator=(ElementCatalog &&) = delete;
 
-    QString plateDirectory() const;
-    QList<ElementDefinition> loadPlates();
-
-    QString buildingsDirectory() const;
-    QList<ElementDefinition> loadBuildings();
-
-    QList<ElementDefinition> loadElements(const QString &directory) const;
-
-    QList<ElementDefinition> loadAllElements();
-
-
+    QList<ElementDefinition>& loadAllElements();
     const QList<ElementDefinition>& allLoadedElements() const;
 
     const ElementDefinition *byName(const QString &name) const;
@@ -61,7 +51,17 @@ public:
 
 private:
     ElementCatalog();
+
+    void InternalElements( );
     void warning(const QString &message) const;
+
+    QString plateDirectory() const;
+    QList<ElementDefinition> loadPlates();
+
+    QString buildingsDirectory() const;
+    QList<ElementDefinition> loadBuildings();
+
+    QList<ElementDefinition> loadElements(const QString &directory) const;
 
     QList<ElementDefinition> _plateElements;
     QList<ElementDefinition> _buildingsElements;
